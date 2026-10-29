@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "awkit/config",
+  "title": "awkit configuration",
+  "description": "Placeholder; keys are defined in docs/interface.md once designed.",
+  "type": "object",
+  "properties": {
+    "hooks": {
+      "type": "object",
+      "description": "Hook name to list of hook entries (design guide section 8)."
+    }
+  },
+  "additionalProperties": true
+}
