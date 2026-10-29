@@ -1,6 +1,6 @@
 [project]
 name = "awkit"
-version = "0.0.0"
+version = "0.0.1"
 description = "awkit harness: tool registry, adapters, state graph, rules, tick/run loop and dashboard for the awkit tools"
 readme = "README.md"
 requires-python = ">=3.12"
