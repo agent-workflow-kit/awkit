@@ -25,9 +25,11 @@
 
 ## Workflow
 
-1. Start with a design session that resolves the open topics in `docs/design.md` and records the decisions there.
-2. Write `docs/interface.md` and `schemas/`.
-3. Implement test-first. Cross-tool end-to-end smoke tests live in `tests/e2e/`.
+1. `docs/interface.md` is the single normative source and `docs/design.md` records the decisions; read both before changing anything. `docs/plan.md` has the staged plan and the version roadmap.
+2. Change the interface and `schemas/` first, and keep `../awkit-docs/interface-registry.md` current.
+3. Implement test-first, one plan stage at a time. Cross-tool end-to-end smoke tests live in `tests/e2e/`.
+4. The first implementation issue verifies every tool's current interface and CLI against its adapter; do not trust the registry rows or this design's per-tool tables without it.
+5. Configuration and adapters are read only under the password-database home; never add an environment variable or flag that names a config path or a command (`docs/interface.md`, Configuration).
 
 ## Repository workflow
 

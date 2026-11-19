@@ -1,131 +1,132 @@
 # awkit: design
 
-Status: Seeded from awkit architecture v1.4; not yet designed.
+Status: 0.1.0-design (2026-11-19), designed against architecture v1.30. `interface.md` is the single normative source; this file records the decisions and the reasons and links to its headings (architecture §7 and §20, design guide).
 
 ## Role and layer
 
-`awkit` is the harness, the top layer (L4). It is the only component aware of the others, and it is optional: everything else works without it. It knows the other tools only through configuration and adapters; tools never adapt to it (architecture section 3.1).
+`awkit` is the harness, the top layer (L4). It is the only component aware of the others, and it is optional: everything else works without it. It knows the other tools only through configuration and adapters; tools never adapt to it (architecture §3.1). It must work with whatever subset of tools the user registers.
 
-## Responsibilities
-
-From architecture section 7.
-
-### Tool registry and adapters (section 7.1)
-
-- `awkit` reads a **tool registry** from its config (`~/.config/awkit/config.yaml`) listing which tool fills each **role**, e.g. `roles: {githost: forgectl, tickets: ticketctl, notify: notice-route}`. (This is distinct from the **interface registry** in `awkit-docs`.)
-- Each registered tool has an **adapter** describing how `awkit` talks to it:
-  - **Declarative YAML first:** command templates (e.g. `list: "jobsctl list --json --queue {queue}"`), jq/JSONPath mappings from tool output into the harness model, trigger definitions, and `periodic:` declarations (commands that should run on a schedule).
-  - **Escape hatches:** any single operation, or a whole adapter, can instead be a Python function or an external executable speaking a harness-defined stdin/stdout JSON protocol. This protocol belongs to the harness; tools never see it.
-- Adapters for our tools and common third-party CLIs ship in the `awkit` repo. A user overlay at `~/.config/awkit/adapters/` adds or overrides adapters (e.g. a private adapter pointing a role at an organization-internal tool). Tool repos never mention the harness.
-
-### Process model: tick and run (section 7.2)
-
-- `awkit tick` does one unit of work: poll adapters that are due, diff their snapshots against the last ones, derive harness events, update the state graph, and evaluate rules.
-- Cron runs `awkit tick` periodically (interval in awkit config, default 1 minute).
-- `awkit run` (and the dashboard while open) loops `tick` at short intervals and accepts early-tick triggers: per-adapter poll intervals; file watchers on a tool's public files (`log.jsonl`, `audit.jsonl`) or other paths an adapter declares (only while the loop runs; file watching under WSL `/mnt/c` is unreliable), purely as a trigger for an early poll; pushes from tool hooks wired to `awkit notify-tick`.
-- **Tick lock:** held for one tick only. Several loops may coexist (cron, `awkit run`, an open dashboard); at most one tick executes at a time and the others serialize. A dashboard opened while `awkit run` is active still runs its own loop.
-- **Idempotency:** ticks are idempotent with respect to state; anything missed is caught by the next poll. Rule actions are recorded (with the event id) before execution, with their result after, and skipped if already recorded; a failed action is retried up to N times (configurable). Rule actions run detached or via jobsctl and never block the tick. Events are internal to `awkit` and never required by tools. Every workflow keeps its periodic cron fallback even when rules trigger it early.
-
-### Wiring hooks (section 7.3)
-
-- `awkit wire <tool>` shows the exact hook registrations that would let that tool call `awkit` (e.g. "on `on-merged`, run `awkit notify-tick --source pr-watch`") and applies them on confirmation; `--yes` skips confirmation; `awkit unwire <tool>` reverses it.
-- `awkit wire` writes only the drop-in file `~/.config/<tool>/config.d/awkit.yaml`, which the tool merges after its `config.yaml` (hook lists are appended); it never edits `config.yaml`, and `awkit` never edits tool config any other way.
-- `awkit` learns about session changes primarily through tools' lifecycle hooks (and otherwise by polling): for agents, the recommended source is agent-spawn's `post-state-change`; claude-session's own hooks serve standalone sessions. Wiring both tools' state hooks to notifications produces duplicates and should be avoided.
-
-### State graph (section 7.4)
-
-- Nodes: ticket, worktree, agent (Claude session), tmux window, job, PR, review draft, gate decision (from `gatectl decisions --json`), notification (from `notice-route history --json`).
-- Edges are derived mostly from labels on lower-tool objects (`ticket=KEY`, `pr=host/<full project path>#N`, `repo=host/<full project path>`, `kind=...`, `owner=<tool>`, `job=<id>`, `rw-item=<id>`) plus branch names. `awkit` stores only links it alone can infer, so its state is largely disposable and can be rebuilt from tool outputs.
-
-### Rules (section 7.5)
-
-"When X then Y", evaluated on derived events. Notifications are wired directly from tools' hooks to notice-route by default, so rules do not send notifications unless the user adds such a rule. Examples:
-
-| When | Then |
-|---|---|
-| pr-watch `comment`, `review_comment` or `review` event on a PR for which agent-spawn has an agent labeled `pr=` | `review-respond respond <pr>` |
-| pr-watch: PR merged or closed | `ticket-work sync` |
-| pr-watch: the user's PR approved, CI green, mergeable, repo opted in | `gatectl check auto-merge` (its input includes the PR head sha); only if the JSON shows `"enforced": true` and `"decision": "allow"` → `forgectl merge --yes --expected-head <the sha the gate evaluated> --decision-id <id>` (public default: notify only) |
-| jobsctl: job held or failed | `review-watch poll` / `review-respond check` / `ticket-work sync` for the owning workflow, so it resolves or reports the job early |
-
-Attention items are not rule actions; the dashboard derives them.
-
-### Dashboard TUI (section 7.6)
-
-- Opened with `awkit dashboard` (or `awkit` with no arguments).
-- Cross-tool views only `awkit` can build: the **attention list** ("needs you"), ticket → agent → PR → review chains, and recent events. Attention items are derived from tool records and hooks: agents with `needs_attention` (`agent-spawn list --needs-attention`: unreported, escalated, blocked, failed, lost), held and failed jobs, review drafts awaiting accept, each tool's pending confirmations, and sessions in `needs-input`. Idle sessions are not listed.
-- A launcher for the tools' own TUIs. Drilling in **suspends** the dashboard and runs the child TUI in the same pane in the foreground; the dashboard redraws with state intact when the child exits. Targeted drill-in passes arguments such as `--focus KEY-12`. If the child supports `--result-file`, `awkit` reads the result (in the child's vocabulary) and its adapter translates the intent (e.g. `start` → enqueue work, `back` → return to the dashboard, `open` → open another TUI). Children without it just return.
-- Actions from the dashboard go through the owning tool's CLI (start work, accept a review, confirm a pending action, attach to an agent, resume, acknowledge, teardown). The dashboard confirms in its own dialog and then passes `--yes --actor human:<user>`. Reorder maps to whichever tool holds the item: ticket-queue for candidates not yet started, jobsctl for enqueued work.
-
-### Other harness commands (section 7.7)
-
-- `awkit audit`: merges every tool's `audit.jsonl` into one timeline, filterable by label, PR or ticket.
-- `awkit notify-tick [--source <tool>]`: requests an early tick and returns immediately.
-- `awkit cron install|uninstall`: writes crontab entries (explicit `PATH` including `~/.local/bin`, optional user-owned env-file prefix) from each adapter's `periodic:` declarations; there is no hard-coded list. The bundled adapters declare `awkit tick`, `jobsctl run`, `jobsctl reconcile`, `review-watch poll`, `pr-watch poll`, `ticket-work sync`, `ticket-queue refresh`, `review-respond check`, `agent-spawn reconcile` (which runs `claude-session reconcile` first), `memoctl prune` and `notice-route flush`, plus opt-in `ticket-work start --auto` and `agent-spawn prune`. Tools with their own `cron install|uninstall` write the same tagged crontab block per tool (`# <tool> managed`), so one replaces the other.
-- **Reboot recovery:** `jobsctl reconcile`, then `agent-spawn reconcile` (which runs `claude-session reconcile`); the workflows then resume through their normal polls.
-- `awkit doctor`: checks that registered tools are installed and respond, adapters load, crontab is present, required env vars are set, required binaries resolve in a non-interactive shell (with each kind's `PATH` override applied), and reports the effective kind profiles (`claude-session kinds --json`).
-
-### Cross-tool testing (section 17)
-
-The end-to-end smoke suite lives in this repo: it runs real tools against fake binaries (`gh`, `glab`, `tmux`, `claude`) placed first on `PATH`, returning canned output and logging invocations. Fake bins are copied per repo, not shared. See `tests/e2e/README.md`.
+Release 0.x is stateless apart from its own audit file and a small cache. It reads every tool by CLI and `--json`, shows the Attention, Chains and Timeline views in a dashboard, checks the installation, writes the cron blocks and the notification wiring, and merges the tools' audit files. The tick loop, the rules engine, the action ledger and the state graph on disk are 1.x.
 
 ## Uses
 
-`awkit` has no hard dependency on any tool; which tools fill which roles is configuration.
-
-| Dependency | Binding |
-|---|---|
-| Registered tools (ours and third-party) | C (adapter) by architecture section 7.1; adapter format details TBD, decided in this design session |
-| `crontab` | TBD (A/B/C), decided in this design session |
-| Third-party libraries (Textual for the dashboard; YAML/Pydantic for config and adapters) | to be justified in this design session (design guide section 3) |
-
-## Architecture sections to read
-
-- Section 3 (core principles: tools never adapt to the harness, layered composition, edge bindings).
-- Section 7 (the harness) in full.
-- Section 8.4 and 9 (session states and agent lifecycle; the dashboard surfaces them).
-- Section 12 (autonomy and gates: when-to-merge rule, `--yes` rules for the dashboard and rules).
-- Section 13 (security: what automation may and may not pass on).
-- Section 14 (audit: `awkit audit` merges the per-tool logs).
-- Section 15 (notifications: direct wiring by default; avoid duplicate state hooks).
-- Section 17 (testing: the cross-tool smoke suite lives here).
-- Design guide sections 8 (hooks and drop-ins), 10 (TUIs; the dashboard style extends this) and 4.4 (confirmations).
-
-## Constraints (decided)
-
-From architecture section 20: none (the harness contracts are in section 7).
-
-## Open topics
-
-From architecture section 20:
-
-- tool registry/adapter format details
-- harness state graph schema
-- harness-level reconcile
-- rules syntax
-- rule-action retry count
-- dashboard panels and actions
-- dashboard style
-- where the dashboard runs
-- when-to-merge rule
-- TUI internals
-- change detection details
+| Tool | Binding | Used for |
+|---|---|---|
+| Every registered tool (all 21 designed tools, plus third-party CLIs through overlay adapters) | C (adapter) | Reads, attention, links, actions, cron blocks, audit paths and doctor checks, by CLI and `--json` only. No tool's `state.db` is read and no tool is imported. |
+| notice-route | C | The destination of the hooks `wire` routes. |
+| `crontab`, a cron daemon | third-party | `cron`, `doctor`. |
+| tmux | third-party, optional | The `W` key. |
 
 ## Decisions
 
-| Decision | Rationale | Date |
+| # | Decision | Interface |
 |---|---|---|
+| D-1 | 0.x is stateless first: adapters, `doctor`, `cron`, `wire`, `audit`, then the dashboard that recomputes everything on each refresh. `tick`, `run`, rules, the ledger and `state.db` are 1.x. Reason: this covers the v1 bar and the cron and credential problems, and postpones the automatic-action surface until the tools it acts through exist (12 of 21 tools are skeletons and pr-watch's commands are stubs). | [Overview](interface.md#overview), [Roadmap](interface.md#roadmap) |
+| D-2 | Adapters map output with awkit's own small path language (dotted members, `[*]`, one equality filter, an index), standard library only, with Python and executable overrides for everything else. No `jq` binary and no JSONPath library. | [Path language](interface.md#path-language), [Escape hatches](interface.md#escape-hatches) |
+| D-3 | Commands are argv lists with single-pass placeholders filled from declared, grammar-checked parameters; no shell, and no tool text in argv or environment. | [Templates and argv rules](interface.md#templates-and-argv-rules) |
+| D-4 | An overlay adapter replaces the bundled adapter of the same tool; there is no merging. | [Adapters](interface.md#adapters) |
+| D-5 | Drill-in suspends the dashboard (hardened: SIGINT ignored, SIGTERM and SIGHUP forwarded, typeahead flushed before and after, terminal restored) and `W` opens a tmux window. The dashboard runs in whatever terminal started it and has its own SIGTERM and SIGHUP handler. An embedded terminal widget was rejected for 0.x. | [Terminal handoff](interface.md#terminal-handoff) |
+| D-6 | Three tabs (Attention, Chains, Timeline) with a doctor badge and per-tool stale markers; one asyncio worker with a semaphore of 8, refreshing every 15 s. | [Views and keys](interface.md#views-and-keys), [Refresh](interface.md#refresh) |
+| D-7 | `cron install` writes a block for every tool whose adapter declares `periodic` entries, including wtctl, gatectl, review-run and claude-session, which the architecture list lacked. Blocks come from awkit's templates pinned by goldens copied from each tool's schemas; awkit never calls a tool's own `cron install`. One lock, one batched read-modify-write, re-read and compare, read-back. | [Cron](interface.md#cron) |
+| D-8 | Block matching is per tool: the end line is tested before the start line; a tool with no end line (jobsctl) is exempt; a comment mentioning a tag is not a block. | [Block grammar](interface.md#block-grammar) |
+| D-9 | Configuration is read only under the password-database home, never through `XDG_CONFIG_HOME` or a path-naming variable, and a symlinked, foreign-owned or group- or world-writable file or parent is refused. `--config` exists only on `validate`. Reason: awkit turns a config edit into a crontab edit and into dashboard actions. | [Configuration](interface.md#configuration) |
+| D-10 | Actions are declared in adapters with a confirm recipe (dry run, shown fields, passed fields, `--yes --actor human:<user>`); a command without `--yes` is `terminal: true` and the tool asks the human itself. | [Actions](interface.md#actions) |
+| D-11 | `doctor` is offline and read-only by default; `--probe` runs each tool's live check one at a time and never sends a test message. Versions are read from package metadata because `--version` is unreliable for many tools. | [Doctor](interface.md#doctor) |
+| D-12 | `awkit audit` reads each tool's public `audit.jsonl` directly by byte offset and pairs records by `attempt_id`; label filters join to objects the adapters read. | [Reading](interface.md#reading) |
+| D-13 | awkit audits only what it alone does (`cron.install`, `cron.uninstall`, `wire`, `unwire`); dashboard actions are audited by the owning tool, so nothing is recorded twice. | [Own records](interface.md#own-records) |
+| D-14 | `wire` in 0.x writes only the notification drop-in (hooks routed to `notice-route send`) and refuses to wire both agent-spawn's and claude-session's state hooks; the early-tick hooks come with the loop. | [Wire](interface.md#wire) |
+| D-15 | Chain links carry a source tag (`record`, `forge`, `branch`, `label`); unverified links are dimmed and destructive or outward-going actions re-verify them. | [Links and chains](interface.md#links-and-chains) |
+| D-16 | One sanitizer runs on every string from any tool before it enters the model, not only on fields a schema marks untrusted. | [Output sanitizing](interface.md#output-sanitizing) |
+| D-17 | No install-all script and no `awkit install`: the interface registry carries an install command and a minimum version per tool, and `doctor` prints them. awkit never runs an installer. | [Doctor](interface.md#doctor) |
+| D-18 | The 1.x engine is specified only at roadmap level now: the reserved commands and the architecture constraints. Its rules syntax, retry count, state graph schema and when-to-merge rule are decided in a short design pass once pr-watch and the gate exist and have been run. | [Roadmap](interface.md#roadmap) |
 
-## Questions for the design session
+My own calls (not asked of the user, listed for review): the `attention`, `chains`, `adapters` and `validate` commands exist because the guide requires a command for every TUI view; the last `doctor` result is cached in `doctor-last.json`; `dashboard` also answers to `browse`; awkit is Linux and WSL only in 0.x; `wire` and the config of other tools are written under the password-database home; the environment variables are limited to three `dashboard.*` keys; there are no `hooks:` or `repos:` keys in 0.x.
 
-1. What is the exact tool registry and adapter file format (YAML schema for command templates, mappings, triggers and `periodic:`; the Python and external-executable escape-hatch protocol; overlay precedence)?
-2. What is the schema of the harness state graph (node and edge types, what is stored versus rebuilt from tool outputs)?
-3. What does harness-level reconcile do, and how does it relate to the tools' own `reconcile` commands?
-4. What is the rules syntax ("when X then Y" on derived events, conditions, actions)?
-5. How many times is a failed rule action retried, and with what backoff?
-6. Which panels and actions does the dashboard offer?
-7. What is the dashboard style (extending design guide section 10)?
-8. Where does the dashboard run (pane, window, session)?
-9. What is the when-to-merge rule (inputs, gate policy, public default of notify only)?
-10. What are the TUI internals (Textual structure, suspend/resume of child TUIs, result-file handling)?
-11. How are changes detected (snapshot diffing, per-adapter poll intervals, file-watch triggers, event ids)?
+## Resolved open topics (architecture §20, awkit)
+
+| Open topic | Where it is resolved |
+|---|---|
+| Tool registry and adapter format | D-2, D-3, D-4; [Adapters](interface.md#adapters) |
+| State graph schema | 0.x has no stored graph; links are recomputed (D-15); the stored schema is 1.x (D-18) |
+| Harness-level reconcile | 1.x (D-18); the reboot-recovery order stays `jobsctl reconcile`, then `agent-spawn reconcile` |
+| Rules syntax, rule-action retry count | 1.x (D-18) |
+| Dashboard panels and actions | D-6, D-10 |
+| Dashboard style, where the dashboard runs | D-5, D-6; the style section of design guide v1.15 |
+| When-to-merge rule | 1.x (D-18); see Open items |
+| TUI internals | D-5, D-6 and the module list below |
+| Change detection | 0.x refreshes on a timer; per-adapter intervals, file watches and `notify-tick` are 1.x |
+| Install-all | D-17 |
+
+## Live verification
+
+| Behavior | Source | Test in the plan |
+|---|---|---|
+| A suspended Textual app restores the terminal exactly; SIGINT and SIGTERM need the hardening above; a typed `y` answers a child's first `/dev/tty` read unless input is flushed before and after | PTY spike | Process tests of the terminal handoff |
+| `/dev/tty` opens with all three standard streams redirected and fails only with no controlling terminal; a captured child must run in a new session with null input | PTY spike | Process test |
+| A result file written in place is unparseable after a kill about two thirds of the time; temp, sync and rename gives valid or missing | PTY spike | Result-file test |
+| Overlapping crontab writers lose updates (60 of 60 runs); one `flock` makes awkit-versus-awkit safe; a window of about 30 ms remains for a foreign writer | Cron spike | Lock test; the window is documented |
+| Block grammars differ per tool (end-less jobsctl block, a loose start rule that also matches an end line, a comment that looks like a start line) | Cron spike | Per-tool block tests and goldens |
+| Foreign lines survive byte for byte (CR, no final newline, non-UTF-8, a 14 MB crontab in about 3 s) | Cron spike | Block manager tests |
+| Polling 20 commands per cycle costs 0.3 percent CPU every 15 s with asyncio | PTY spike | Refresh budget test |
+| `--version` prints `0.0.0` for 15 of 21 tools | Inventory | `tool.version` reads metadata |
+| Tools' current interfaces and CLIs differ from the registry rows | Inventory | The first issue: verify every tool's interface and update the adapters |
+
+## Modules
+
+| Module | Responsibility |
+|---|---|
+| `gateway` | Every subprocess, file read of tool output and `crontab` call. |
+| `config` | The hardened loader and the models. |
+| `adapters` | The loader, the path language, template filling and the override protocol. |
+| `readers` | The asyncio refresh worker and the per-tool read results with their age. |
+| `sanitize` | The one sanitizer. |
+| `model` | Attention items and chains from reads and links. |
+| `actions` | The confirm recipes and the action runner. |
+| `cron` | The block manager, templates and goldens. |
+| `wire` | The drop-in writer. |
+| `doctor` | The checks and the cache file. |
+| `audit` | The reader, merger, pairing and own writer. |
+| `tui` | The Textual views (the optional extra); the logic modules above never import it. |
+| `cli` | Argument parsing and the exit-code mapping. |
+
+## Data model
+
+No database in 0.x. Files: `audit.jsonl`, `doctor-last.json` and `cron.lock` in the state directory (see [Files](interface.md#files)). Everything else is derived on each refresh from tool output.
+
+## Concurrency
+
+See [Concurrency](interface.md#concurrency). Reads take no locks; `cron` takes one `flock`; `wire` renames one file; the dashboard's refresh cycle never overlaps itself.
+
+## Error handling
+
+A failing tool never fails the dashboard: its data goes stale with an age and a marker. A failing adapter excludes only its tool. A refusal is an exit 20 with a reason. A cron or wire write that cannot be completed leaves the previous file, and the audit record shows `unknown` when the outcome cannot be known.
+
+## Test strategy
+
+- All subprocess and file access through `gateway`; fake tool binaries per repo in `tests/fakebin/`, copied from nothing shared.
+- Pilot tests of the Textual views against fake readers (no snapshot tests; no fixed sleeps).
+- A hostile-string corpus through every view and every `--json` output.
+- Process tests (marker `process`): the terminal handoff, typeahead flush, SIGINT and SIGTERM, result-file atomicity.
+- Per-tool cron goldens, the block manager and the lock.
+- Schema validation of every `--json` output, with positive and negative samples.
+- A cross-tool smoke suite in `tests/e2e/` that runs the 0.x commands against fake binaries on `PATH` (architecture §17).
+- `live` tests, never in CI: `cron install` against a real crontab with a backup and a byte-identical restore.
+- `make verify`, the schema check at CI's pinned version, and `make mdlint` before every pull request.
+
+## Open items (for the 1.x design pass)
+
+- Rules syntax, the event vocabulary, the retry count and backoff, and the action ledger schema.
+- The state graph schema and what is rebuilt.
+- The when-to-merge rule: its trigger, the repo opt-in key, the gate policy and input, and who creates the pr-watch watch the rules depend on. Its inputs are weak today: pr-watch's commands are stubs and the merge gate cannot be enforced until a human sets it.
+- Rule R1 (`review-respond check --pr`): the flag must exist in review-respond's interface.
+- Rule R2 (a merged or closed pull request triggers `ticket-work sync`) has no producer yet, because nothing watches the user's own pull requests.
+- `notify-tick` and the early-tick hooks of `wire`.
+- Reboot recovery as a command.
+- Whether the config hash warning (a hardening step left out of 0.x) is wanted.
+
+## Deviations from the design guide
+
+- `awkit dashboard` is also accepted as `awkit browse`.
+- No `hooks:` or `repos:` config keys in 0.x; no hooks exposed.
+- Config and overlay are read only under the password-database home, with ownership and symlink refusal (as for the notifiers and notice-route).
+- Linux and WSL only in 0.x.
