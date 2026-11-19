@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "awkit/cli/chains.json",
   "title": "chains --json",
-  "description": "Chains with the source tag of every link.",
+  "description": "Chains with the source tag of every link. chains --ticket with no match exits 0 with an empty list.",
   "type": "object",
   "properties": {
     "chains": {
@@ -19,11 +19,20 @@
       },
       "maxItems": 256,
       "uniqueItems": true
+    },
+    "partial": {
+      "type": "array",
+      "items": {
+        "$ref": "../defs.json#/$defs/tool_name"
+      },
+      "maxItems": 256,
+      "uniqueItems": true
     }
   },
   "required": [
     "chains",
-    "stale"
+    "stale",
+    "partial"
   ],
   "additionalProperties": false
 }

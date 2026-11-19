@@ -2,10 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "awkit/cli/audit.json",
   "title": "audit --json",
-  "description": "The merged timeline by ts. Without --no-pair a record with an attempt_id is paired with the other record sharing it (pairing paired, records of 2); an attempted record with no outcome is pairing unknown and stands alone; with --no-pair every entry is unpaired. skipped_lines counts malformed lines per tool.",
+  "description": "The merged timeline, oldest first, by (ts as UTC instant, tool, file offset of the first record). Each tool's adapter may declare a pairing descriptor (key paths and the attempted value): records sharing a key form one entry of any size (paired, in_flight, unknown or unpaired); without a descriptor, or with --no-pair, every record is a single. skipped counts malformed or oversize lines per tool and lists the tools whose file was unusable.",
   "type": "object",
   "properties": {
-    "records": {
+    "entries": {
       "type": "array",
       "items": {
         "type": "object",
@@ -13,25 +13,28 @@
           "tool": {
             "$ref": "../defs.json#/$defs/tool_name"
           },
-          "ts": {
-            "$ref": "../defs.json#/$defs/ts"
-          },
-          "attempt_id": {
-            "oneOf": [
-              {
-                "$ref": "../defs.json#/$defs/attempt_id"
-              },
-              {
-                "type": "null"
-              }
-            ]
+          "key": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 128,
+              "minLength": 0
+            },
+            "maxItems": 8,
+            "x-untrusted": true,
+            "description": "The pairing key values; empty for a single."
           },
           "pairing": {
             "enum": [
               "paired",
+              "in_flight",
+              "unknown",
               "unpaired",
-              "unknown"
+              "single"
             ]
+          },
+          "ts": {
+            "$ref": "../defs.json#/$defs/ts"
           },
           "records": {
             "type": "array",
@@ -42,36 +45,54 @@
               "additionalProperties": true
             },
             "minItems": 1,
-            "maxItems": 2,
+            "maxItems": 10000,
             "x-untrusted": true,
-            "description": "The sanitized tool records as read; each is valid against the schema the adapter names."
+            "description": "The sanitized tool records as read; each has a string ts that is RFC 3339."
           }
         },
         "required": [
           "tool",
-          "ts",
-          "attempt_id",
+          "key",
           "pairing",
+          "ts",
           "records"
         ],
         "additionalProperties": false
       },
       "maxItems": 1000000
     },
-    "skipped_lines": {
+    "skipped": {
       "type": "object",
-      "propertyNames": {
-        "$ref": "../defs.json#/$defs/tool_name"
+      "properties": {
+        "lines": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "../defs.json#/$defs/tool_name"
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "../defs.json#/$defs/tool_name"
+          },
+          "maxItems": 256,
+          "uniqueItems": true
+        }
       },
-      "additionalProperties": {
-        "type": "integer",
-        "minimum": 0
-      }
+      "required": [
+        "lines",
+        "files"
+      ],
+      "additionalProperties": false
     }
   },
   "required": [
-    "records",
-    "skipped_lines"
+    "entries",
+    "skipped"
   ],
   "additionalProperties": false
 }

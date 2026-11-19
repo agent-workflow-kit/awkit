@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "awkit/audit.json",
   "title": "awkit audit.jsonl record",
-  "description": "Public, append-only. awkit audits only what it alone does (cron.install, cron.uninstall, wire, unwire): an attempted record before any change and an outcome record after it, sharing attempt_id. inputs hold hashes, never the text. There is no decision_id (awkit takes no gate decision in 0.x); no title, body or tool text.",
+  "description": "Public, append-only. awkit audits only what it alone does (cron.install, cron.uninstall, wire, unwire): an attempted record after planning and before any change, and an outcome record after it, sharing attempt_id; one pair per changed file. inputs hold hashes, never the text. There is no decision_id (awkit takes no gate decision in 0.x); no title, body or tool text.",
   "type": "object",
   "properties": {
     "ts": {
@@ -43,7 +43,7 @@
       "type": "string",
       "maxLength": 4096,
       "minLength": 1,
-      "pattern": "^(?:crontab|/[^\\r\\n]{1,4095})$",
+      "pattern": "^(?:crontab|/[^\\r\\n]{1,4095})(?![\\s\\S])",
       "description": "The literal crontab, or the absolute path of the drop-in."
     },
     "inputs": {
@@ -54,7 +54,7 @@
           "items": {
             "$ref": "defs.json#/$defs/tool_name"
           },
-          "minItems": 1,
+          "minItems": 0,
           "maxItems": 256,
           "uniqueItems": true
         },
@@ -100,12 +100,15 @@
         "code": {
           "oneOf": [
             {
-              "$ref": "defs.json#/$defs/code"
+              "$ref": "defs.json#/$defs/error_code"
             },
             {
               "type": "null"
             }
           ]
+        },
+        "unchanged": {
+          "type": "boolean"
         },
         "tools": {
           "type": "array",
@@ -117,11 +120,13 @@
               },
               "outcome": {
                 "enum": [
-                  "installed",
-                  "replaced",
-                  "unchanged",
-                  "removed",
+                  "done",
+                  "failed",
+                  "skipped",
                   "wired",
+                  "replaced",
+                  "removed",
+                  "unchanged",
                   "nothing_to_wire"
                 ]
               }

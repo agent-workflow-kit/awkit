@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "awkit/cli/result-file.json",
-  "title": "browse --result-file document",
-  "description": "Written by awkit dashboard and awkit browse on exit 0 when --result-file is given (temporary file, sync, rename, mode 0600). Not stdout JSON: dashboard and browse print nothing with --json.",
+  "title": "dashboard and browse --result-file document",
+  "description": "Written by awkit dashboard and awkit browse on exit 0 when --result-file is given (temporary file created with O_EXCL and O_NOFOLLOW, sync, rename, mode 0600). Not stdout JSON: dashboard and browse print nothing with --json.",
   "type": "object",
   "properties": {
     "intent": {
@@ -29,7 +29,7 @@
         ],
         "additionalProperties": false
       },
-      "maxItems": 256
+      "maxItems": 1
     }
   },
   "required": [

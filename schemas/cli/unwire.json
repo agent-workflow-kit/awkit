@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "awkit/cli/unwire.json",
   "title": "unwire --json",
-  "description": "Outcome of wiring one tool. files lists each drop-in considered (the tool's hook drop-in and, for notice-route, the rule drop-in) with the exact text. nothing_to_wire exits 0 with no files.",
+  "description": "Outcome of wiring one tool. files lists the one drop-in considered (the tool's hook drop-in) with the exact text, which is awkit's own generated text. nothing_to_wire exits 0 with no files.",
   "type": "object",
   "properties": {
     "tool": {
@@ -28,8 +28,7 @@
           },
           "role": {
             "enum": [
-              "hooks",
-              "notice_route_rules"
+              "hooks"
             ]
           },
           "outcome": {
@@ -43,8 +42,7 @@
             "type": "string",
             "maxLength": 1000000,
             "minLength": 0,
-            "x-untrusted": true,
-            "description": "The exact drop-in text (shown for wire, and with --dry-run)."
+            "description": "The exact drop-in text (shown for wire, and with --dry-run); awkit's own text."
           }
         },
         "required": [
@@ -54,7 +52,7 @@
         ],
         "additionalProperties": false
       },
-      "maxItems": 8
+      "maxItems": 1
     }
   },
   "required": [

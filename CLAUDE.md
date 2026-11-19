@@ -14,7 +14,7 @@
 
 - **Open source, no confidential information.** Never add company names, hostnames, ticket project keys, custom-field IDs, repo or org names, people's names or private skill/plugin names. Organization specifics belong in the user's config and adapter overlay (`~/.config/awkit/adapters/`).
 - **Never import sibling repos.** Read their `docs/interface.md` and `schemas/` by path only. Copying a sibling's schema files into tests, pinned to a version, is allowed.
-- **The harness adapts to tools, never the reverse.** Never require a tool to change for `awkit`. Talk to tools only through their CLIs and documented `--json` output; never read a tool's `state.db`. `awkit wire` writes only `~/.config/<tool>/config.d/awkit.yaml`; never edit a tool's `config.yaml`.
+- **The harness adapts to tools, never the reverse.** Never require a tool to change for `awkit`. Talk to tools only through their CLIs and documented `--json` output; never read a tool's `state.db`. `awkit wire` writes only `~/.config/<tool>/config.d/awkit.yaml` (the hook drop-in; never notice-route's rules); never edit a tool's `config.yaml`. `awkit cron` runs each tool's own `cron install` and never writes the crontab itself.
 - **Interface first.** Write `docs/interface.md` and `schemas/` before implementation.
 - **Versioning.** Semver. A breaking interface change is, before 1.0, a `feat` commit whose title names the break (never `!` before 1.0), and from 1.0 on a `!` commit; the title becomes the changelog line (details go in the PR body). Either way, update `awkit-docs/interface-registry.md`. Never hand-edit CHANGELOG.md or the version.
 - **`make verify` before every commit.**
@@ -29,7 +29,7 @@
 2. Change the interface and `schemas/` first, and keep `../awkit-docs/interface-registry.md` current.
 3. Implement test-first, one plan stage at a time. Cross-tool end-to-end smoke tests live in `tests/e2e/`.
 4. The first implementation issue verifies every tool's current interface and CLI against its adapter; do not trust the registry rows or this design's per-tool tables without it.
-5. Configuration and adapters are read only under the password-database home; never add an environment variable or flag that names a config path or a command (`docs/interface.md`, Configuration).
+5. Configuration and adapters are read only under the password-database home; never add an environment variable or flag that names a config path or a command, and never find a program through the process `PATH` (`docs/interface.md`, Configuration and Program resolution).
 
 ## Repository workflow
 

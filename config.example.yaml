@@ -3,31 +3,35 @@
 # The config, drop-ins, the adapter overlay (~/.config/awkit/adapters/) and their parent
 # directories must be owned by you, not symlinks, and not group- or world-writable.
 # Unknown keys are refused. There are no repos: or hooks: keys in 0.x.
+# Every key whose default is none accepts null.
 # `awkit validate` checks this file against schemas/config.json without running any tool.
 
 me:
   # The <user> of human:<user>. Default: the OS user name (null = use the default).
   name: null
-  # Account names; passed to tools only where an adapter says so. Default: none.
+  # Account names. 0.x: validated only, passed nowhere (reserved for 1.x rules). Default: none.
   github: null
   gitlab: null
   jira: null
 
-# Role to tool. Default: none. Example entries:
+# Role to tool. 0.x: validated only (a value must name a loaded adapter). Default: none.
+# Example entries:
 #   githost: forgectl
 #   tickets: ticketctl
 #   notify: notice-route
 roles: {}
 
-# Per-tool switches, keyed by tool name. Default: none (every registered tool is enabled).
+# Per-tool switches, keyed by tool name. Default: none (every tool whose program resolves is registered).
 # Example entry:
 #   forgectl:
-#     enabled: true   # default true; a disabled tool is skipped everywhere
-#     bin: null       # default none; an absolute path overrides the adapter's program name
+#     enabled: true   # default true; an explicit true makes "not installed" a doctor failure,
+#                     # false skips the tool everywhere
+#     bin: null       # default none; an absolute path (only A-Z a-z 0-9 . _ + @ / -) that
+#                     # overrides the adapter's program name. awkit never searches the PATH.
 tools: {}
 
 dashboard:
-  # The refresh interval; at least 5s. Env: AWKIT_DASHBOARD__REFRESH.
+  # The refresh interval; at least 5s. Env: AWKIT_DASHBOARD__REFRESH (wins over this file).
   refresh: 15s
   # The most concurrent reads, 1 to 16. Env: AWKIT_DASHBOARD__CONCURRENCY.
   concurrency: 8
@@ -35,14 +39,18 @@ dashboard:
   read_timeout: 10s
 
 cron:
-  # A user-owned file (mode 0600) that the cron lines source. Default: none.
+  # A user-owned file (mode 0600) passed to the tools whose own `cron install` takes an env file.
+  # Default: none.
   env_file: null
-  # Absolute directories added to the cron PATH (no colon in a path). Default: [].
+  # Absolute directories searched for tool programs after ~/.local/bin. Default: [].
   path_extra: []
-  # Override an entry's schedule per tool with a cron expression or one of the entry's
-  # accepted shorthands. Default: the adapter's schedule. Example entries:
-  #   agent-spawn: "*/10 * * * *"
+  # The tool's own interval value for its `cron install`: a count such as 15m or 1h, or a
+  # five-field cron expression, as that tool accepts. Default: the tool's own. Example entries:
+  #   agent-spawn: 10m
   intervals: {}
+  # Opt-in names an adapter maps to flags of the tool's own installer. Default: none. Example entry:
+  #   ticket-work: [with-start]
+  options: {}
 
 doctor:
   # The timeout of one probe (doctor --probe).

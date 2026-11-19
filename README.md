@@ -14,8 +14,8 @@ L4 (the top layer). `awkit` is the only component aware of the others, and it is
 
 - **Dashboard.** `awkit` opens a terminal dashboard with three tabs: Attention (what needs you), Chains (ticket, agent, pull request and review linked together) and Timeline (recent audited actions). It reads every tool through its own CLI and `--json` output on a timer and keeps no copy of their data. Enter opens the object in the owning tool's own TUI, and actions run the owning tool's CLI after a confirmation dialog.
 - **Doctor.** `awkit doctor` checks that registered tools are installed and current, adapters load, the crontab and cron environment are right, and the sandbox tools exist. It is read-only; `--probe` adds each tool's live check.
-- **Cron.** `awkit cron install` writes one tagged crontab block per tool from the adapters, byte-compatible with each tool's own `cron install`, in one locked edit.
-- **Wire.** `awkit wire <tool>` writes a drop-in that routes that tool's attention hooks to `notice-route send`.
+- **Cron.** `awkit cron install` takes one lock and runs each registered tool's own `cron install` in turn, mapping your awkit config (interval, env file, opt-ins) to that tool's flags. awkit never writes the crontab itself; `doctor` recognizes each tool's block.
+- **Wire.** `awkit wire <tool>` writes one drop-in, `~/.config/<tool>/config.d/awkit.yaml`, that routes that tool's attention hooks to `notice-route send`. It does not touch notice-route's rules: add one for the source yourself (see below), and `doctor` warns when a wired tool has none.
 - **Audit.** `awkit audit` merges every tool's `audit.jsonl` into one timeline and pairs attempts with outcomes.
 - **Adapters.** One YAML file per tool maps the tool's output into the model; an overlay in `~/.config/awkit/adapters/` adds or replaces them, and Python or executable overrides cover what YAML cannot.
 
@@ -33,9 +33,19 @@ See [docs/interface.md](docs/interface.md#commands) for flags, exit codes and ou
 - `awkit audit`
 - `awkit validate`, `awkit adapters list|show`
 
+## Wiring a tool to notice-route
+
+`wire` only writes the tool's hook drop-in. The routing lives in your own notice-route config; add a rule for the wired source there. The shape depends on your destinations, so see notice-route's own documentation; in outline it names the source and a destination of yours:
+
+```yaml
+rules:
+  - source: agent-spawn
+    destination: my-destination
+```
+
 ## Configuration
 
-`~/.config/awkit/config.yaml` (see `config.example.yaml`). Configuration and adapters are read only from your home directory as the password database names it, and files that are symlinks, owned by someone else or writable by others are refused, because awkit's configuration decides which programs run. See [Configuration](docs/interface.md#configuration).
+`~/.config/awkit/config.yaml` (see `config.example.yaml`). Configuration and adapters are read only from your home directory as the password database names it, and files that are symlinks, owned by someone else or writable by others are refused, because awkit's configuration decides which programs run. awkit never searches your `PATH`: it finds tools in `~/.local/bin`, your `cron.path_extra` directories and the system directories, so a tool installed elsewhere needs `tools.<tool>.bin`. See [Configuration](docs/interface.md#configuration).
 
 ## Dependencies
 
@@ -45,15 +55,17 @@ See [docs/interface.md](docs/interface.md#commands) for flags, exit codes and ou
 - `notice-route` for the notification wiring.
 - `crontab` and a running cron daemon for `awkit cron`; on WSL the daemon must be enabled.
 - `tmux` is optional (the `W` key).
-- Textual `>=8.2,<9` for the dashboard, as an optional extra (`uv tool install 'git+https://github.com/agent-workflow-kit/awkit' --with textual`); the core uses the standard library, PyYAML and Pydantic.
+- Textual `>=8.2,<9` for the dashboard, as the optional `tui` extra; the core uses the standard library, PyYAML and Pydantic.
 
 Platform: Linux and WSL in 0.x; macOS is not supported yet.
 
 ## Install
 
 ```sh
-uv tool install git+https://github.com/agent-workflow-kit/awkit
+uv tool install 'awkit[tui] @ git+https://github.com/agent-workflow-kit/awkit'
 ```
+
+Without the dashboard, `uv tool install git+https://github.com/agent-workflow-kit/awkit` installs the core only.
 
 ## Documentation
 

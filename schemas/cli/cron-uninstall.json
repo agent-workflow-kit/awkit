@@ -2,11 +2,17 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "awkit/cli/cron-uninstall.json",
   "title": "cron uninstall --json",
-  "description": "Per-tool outcome in registry order. With --dry-run nothing is written and diff holds the unified text change. A malformed block exits 20 with the error envelope instead.",
+  "description": "Per-tool outcome in lexical tool order. awkit runs each tool's own cron install or uninstall and never writes the crontab itself. With --dry-run nothing is run except a tool's own read-only dry run and unchanged is null; planned carries the argv and, where the tool reports it, changed. unchanged is true when the crontab text did not change.",
   "type": "object",
   "properties": {
     "dry_run": {
       "type": "boolean"
+    },
+    "unchanged": {
+      "type": [
+        "boolean",
+        "null"
+      ]
     },
     "tools": {
       "type": "array",
@@ -18,8 +24,47 @@
           },
           "outcome": {
             "enum": [
-              "removed",
-              "unchanged"
+              "done",
+              "failed",
+              "planned",
+              "skipped"
+            ]
+          },
+          "exit": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 255
+          },
+          "changed": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "argv": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 1024,
+              "minLength": 0,
+              "x-untrusted": true
+            },
+            "maxItems": 64
+          },
+          "message": {
+            "oneOf": [
+              {
+                "type": "string",
+                "maxLength": 1000,
+                "minLength": 0,
+                "x-untrusted": true
+              },
+              {
+                "type": "null"
+              }
             ]
           }
         },
@@ -30,17 +75,11 @@
         "additionalProperties": false
       },
       "maxItems": 256
-    },
-    "diff": {
-      "type": "string",
-      "maxLength": 4000000,
-      "minLength": 0,
-      "x-untrusted": true,
-      "description": "Unified text change; only with --dry-run. Contains foreign crontab lines."
     }
   },
   "required": [
     "dry_run",
+    "unchanged",
     "tools"
   ],
   "additionalProperties": false

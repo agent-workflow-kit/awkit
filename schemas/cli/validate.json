@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "awkit/cli/validate.json",
   "title": "validate --json",
-  "description": "Loads the config, drop-ins and every adapter against the schemas without running any tool. Exit 0 prints valid true; an invalid config exits 2 with the error envelope (details carry the files).",
+  "description": "Loads the config, drop-ins and every adapter against the schemas without running any tool or override. Always printed; exit 0 when valid is true, exit 2 when anything is invalid or unsafe.",
   "type": "object",
   "properties": {
     "valid": {
@@ -61,6 +61,32 @@
               "additionalProperties": false
             },
             "maxItems": 1000
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "location": {
+                  "type": "string",
+                  "maxLength": 1000,
+                  "minLength": 0,
+                  "x-untrusted": true
+                },
+                "message": {
+                  "type": "string",
+                  "maxLength": 1000,
+                  "minLength": 0,
+                  "x-untrusted": true
+                }
+              },
+              "required": [
+                "location",
+                "message"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 1000
           }
         },
         "required": [
@@ -68,7 +94,8 @@
           "kind",
           "tool",
           "ok",
-          "errors"
+          "errors",
+          "warnings"
         ],
         "additionalProperties": false
       },

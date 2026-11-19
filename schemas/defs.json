@@ -7,99 +7,121 @@
       "type": "string",
       "maxLength": 32,
       "minLength": 1,
-      "pattern": "^[a-z][a-z0-9-]{0,31}$",
-      "description": "A tool name from the registry. Full match."
+      "pattern": "^[a-z][a-z0-9-]{0,31}(?![\\s\\S])",
+      "description": "A tool name. Full match."
     },
     "name_id": {
       "type": "string",
       "maxLength": 64,
       "minLength": 1,
-      "pattern": "^[a-z][a-z0-9_-]{0,63}$",
-      "description": "A closed lowercase identifier (read name, action id, rule id). Full match."
+      "pattern": "^[a-z][a-z0-9_-]{0,63}(?![\\s\\S])",
+      "description": "A closed lowercase identifier (read name, action id). Full match."
     },
     "code": {
       "type": "string",
       "maxLength": 64,
       "minLength": 1,
-      "pattern": "^[a-z][a-z0-9_]{0,63}$",
-      "description": "A closed lowercase code with underscores. Full match."
+      "pattern": "^[a-z][a-z0-9_]{0,63}(?![\\s\\S])",
+      "description": "A closed lowercase code with underscores (a reason, an error code). Full match."
     },
     "actor": {
       "type": "string",
       "maxLength": 70,
       "minLength": 7,
-      "pattern": "^(?:human|auto):[A-Za-z0-9._@-]{1,64}$",
+      "pattern": "^(?:human|auto):[A-Za-z0-9._@-]{1,64}(?![\\s\\S])",
       "description": "human:<user> or auto:<name>. Full match."
     },
     "ts": {
       "type": "string",
-      "maxLength": 32,
-      "minLength": 20,
-      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:[.][0-9]{1,6})?Z$",
-      "description": "UTC timestamp, YYYY-MM-DDTHH:MM:SS[.ffffff]Z. Full match."
+      "maxLength": 24,
+      "minLength": 24,
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z(?![\\s\\S])",
+      "description": "UTC timestamp written by awkit, YYYY-MM-DDTHH:MM:SS.sssZ. Full match."
     },
     "sha256": {
       "type": "string",
       "maxLength": 64,
       "minLength": 64,
-      "pattern": "^[0-9a-f]{64}$",
+      "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
       "description": "Lowercase hex SHA-256. Full match."
     },
     "attempt_id": {
       "type": "string",
-      "maxLength": 64,
-      "minLength": 8,
-      "pattern": "^[A-Za-z0-9_-]{8,64}$",
-      "description": "Pairs an attempted record with its outcome. Full match."
+      "maxLength": 22,
+      "minLength": 22,
+      "pattern": "^[A-Za-z0-9_-]{22}(?![\\s\\S])",
+      "description": "Pairs awkit's own attempted record with its outcome (22 characters). Full match."
     },
     "duration": {
       "type": "string",
       "maxLength": 24,
       "minLength": 2,
-      "pattern": "^[1-9][0-9]*(?:ms|s|m|h)$",
-      "description": "A positive integer with the unit ms, s, m or h. Full match."
+      "pattern": "^[1-9][0-9]*(?:ms|s|m|h|d)(?![\\s\\S])",
+      "description": "A positive integer with the unit ms, s, m, h or d; no bare numbers, no fractions. Full match."
     },
     "abs_path": {
       "type": "string",
       "maxLength": 4096,
       "minLength": 1,
-      "pattern": "^/[^\\r\\n]{0,4095}$",
-      "description": "An absolute path. Full match."
+      "pattern": "^/[^\\r\\n]{0,4095}(?![\\s\\S])",
+      "description": "An absolute path (display only). Full match."
+    },
+    "safe_path": {
+      "type": "string",
+      "maxLength": 4096,
+      "minLength": 1,
+      "pattern": "^(?![\\s\\S]*//)(?![\\s\\S]*(?:^|/)[.][.](?:/|(?![\\s\\S])))/[A-Za-z0-9._+@/-]{0,4095}(?![\\s\\S])",
+      "description": "An absolute path that awkit may write into a drop-in or pass to a tool's installer: only A-Z a-z 0-9 . _ + @ / -, no // and no .. segment. Full match."
     },
     "version": {
       "type": "string",
       "maxLength": 64,
       "minLength": 1,
-      "pattern": "^[0-9][A-Za-z0-9.+_-]{0,63}$",
+      "pattern": "^[0-9][A-Za-z0-9.+_-]{0,63}(?![\\s\\S])",
       "description": "A tool version string. Full match."
     },
     "object_id": {
       "type": "string",
       "maxLength": 256,
       "minLength": 1,
-      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@/#=+~-]{0,255}$",
-      "description": "An object id as the owning tool prints it. Full match.",
+      "pattern": "^(?![\\s\\S]*(?:^|/)[.][.](?:/|(?![\\s\\S])))[A-Za-z0-9/*][A-Za-z0-9._:@/#=+~*-]{0,255}(?![\\s\\S])",
+      "description": "An object id as the owning tool prints it; the first character is never -, no .. path segment. Full match.",
       "x-untrusted": true
     },
     "focus_id": {
       "type": "string",
       "maxLength": 300,
       "minLength": 3,
-      "pattern": "^[a-z][a-z0-9-]{0,31}:[A-Za-z0-9][A-Za-z0-9._:@/#=+~-]{0,255}$",
+      "pattern": "^(?![\\s\\S]*(?:^|/)[.][.](?:/|(?![\\s\\S])))[a-z][a-z0-9-]{0,31}:[A-Za-z0-9/*][A-Za-z0-9._:@/#=+~*-]{0,255}(?![\\s\\S])",
       "description": "<tool>:<object>, the --focus argument. Full match."
     },
+    "hash": {
+      "type": "string",
+      "maxLength": 128,
+      "minLength": 12,
+      "pattern": "^[0-9a-f]{12,128}(?![\\s\\S])",
+      "description": "A lowercase hex hash of 12 to 128 digits (a plan, content or head hash). Full match."
+    },
+    "int": {
+      "type": "string",
+      "maxLength": 18,
+      "minLength": 1,
+      "pattern": "^(?:0|[1-9][0-9]{0,17})(?![\\s\\S])",
+      "description": "A non-negative decimal integer of at most 18 digits without leading zeros. Full match."
+    },
     "node_kind": {
-      "enum": [
-        "ticket",
-        "worktree",
-        "agent",
-        "tmux_window",
-        "job",
-        "pull_request",
-        "review_draft",
-        "gate_decision",
-        "notification"
-      ]
+      "type": "string",
+      "maxLength": 32,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9_.-]{0,31}(?![\\s\\S])",
+      "description": "An open node kind; the bundled vocabulary is in the interface (Links and chains). Full match."
+    },
+    "label_key": {
+      "type": "string",
+      "maxLength": 32,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9_.-]{0,31}(?![\\s\\S])",
+      "description": "An open label key; the bundled vocabulary is in the interface (Links and chains). Full match."
     },
     "severity": {
       "enum": [
@@ -111,22 +133,8 @@
     "link_source": {
       "enum": [
         "record",
-        "forge",
         "branch",
         "label"
-      ]
-    },
-    "label_key": {
-      "enum": [
-        "ticket",
-        "pr",
-        "repo",
-        "kind",
-        "owner",
-        "job",
-        "rw-item",
-        "draft",
-        "consumer"
       ]
     },
     "object_ref": {
@@ -316,17 +324,36 @@
       "additionalProperties": false,
       "description": "Nodes (ticket, agent, pull request, review, ...) and the links between them, each with its tag."
     },
+    "error_code": {
+      "enum": [
+        "internal",
+        "invalid_argument",
+        "missing_option",
+        "config_invalid",
+        "not_found",
+        "unavailable",
+        "checks_failed",
+        "tool_unavailable",
+        "cron_partial",
+        "human_required",
+        "refused",
+        "ambiguous"
+      ]
+    },
     "error_reason": {
       "enum": [
         "config_unsafe",
         "adapter_invalid",
-        "malformed_block",
         "drop_in_foreign",
         "duplicate_state_hooks",
         "stale_object",
-        "link_unverified",
+        "unsafe_value",
+        "xdg_mismatch",
         "unsupported_platform",
-        "locked"
+        "locked",
+        "crontab_failed",
+        "crontab_unusable",
+        "wire_rejected"
       ]
     },
     "error": {
@@ -336,7 +363,7 @@
           "type": "object",
           "properties": {
             "code": {
-              "$ref": "#/$defs/code"
+              "$ref": "#/$defs/error_code"
             },
             "message": {
               "type": "string",
@@ -366,7 +393,7 @@
         "error"
       ],
       "additionalProperties": false,
-      "description": "The envelope printed on stdout for every non-zero exit except doctor's exit 12. reason is present for exit 20 and for exit 12 where the table names one; details.candidates lists the candidates of exit 21."
+      "description": "The envelope printed on stdout for every non-zero exit except doctor's exit 12. reason is present only for exits 12 and 20; details.candidates lists the candidates of exit 21 as <tool>:<object> or site:KEY strings."
     },
     "doctor_status": {
       "enum": [
@@ -375,14 +402,18 @@
         "fail"
       ]
     },
+    "check_id": {
+      "type": "string",
+      "maxLength": 64,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9_.-]{0,63}(?![\\s\\S])",
+      "description": "An open check id. Full match."
+    },
     "doctor_check": {
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "maxLength": 96,
-          "minLength": 1,
-          "pattern": "^(?:config[.]safe|adapter[.]loaded|tool[.]installed|tool[.]version|tool[.]validate|cron[.]daemon|cron[.]block|cron[.]path|cron[.]env_file|cron[.]lines|env[.]variables|sandbox[.]tools|audit[.]coverage|pair[.][a-z][a-z0-9_-]{0,63}|probe[.][a-z][a-z0-9-]{0,31})$"
+          "$ref": "#/$defs/check_id"
         },
         "tool": {
           "oneOf": [
@@ -475,27 +506,6 @@
       ],
       "additionalProperties": false,
       "description": "The result of one doctor run. Also the content of doctor-last.json. Exit 12 prints the same document."
-    },
-    "cron_tool_outcome": {
-      "type": "object",
-      "properties": {
-        "tool": {
-          "$ref": "#/$defs/tool_name"
-        },
-        "outcome": {
-          "enum": [
-            "installed",
-            "replaced",
-            "unchanged",
-            "removed"
-          ]
-        }
-      },
-      "required": [
-        "tool",
-        "outcome"
-      ],
-      "additionalProperties": false
     }
   }
 }
