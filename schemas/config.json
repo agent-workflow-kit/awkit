@@ -1,14 +1,210 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "awkit/config",
-  "title": "awkit configuration",
-  "description": "Placeholder; keys are defined in docs/interface.md once designed.",
+  "$id": "awkit/config.json",
+  "title": "awkit config",
+  "description": "Merged config (config.yaml plus config.d drop-ins, lists replaced). Unknown keys are refused; there are no repos or hooks keys in 0.x. Environment variables set only dashboard.refresh, dashboard.concurrency and dashboard.read_timeout. Self-contained: no external $ref.",
   "type": "object",
   "properties": {
-    "hooks": {
+    "me": {
       "type": "object",
-      "description": "Hook name to list of hook entries (design guide section 8)."
+      "properties": {
+        "name": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 256,
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "github": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._@:-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "gitlab": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._@:-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "jira": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._@:-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "roles": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "maxLength": 32,
+        "minLength": 1,
+        "pattern": "^[a-z][a-z0-9_-]{0,31}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/tool_name"
+      },
+      "maxProperties": 32,
+      "description": "Role to tool, for example githost: forgectl, tickets: ticketctl, notify: notice-route."
+    },
+    "tools": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/tool_name"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "bin": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/abs_path"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "maxProperties": 256
+    },
+    "dashboard": {
+      "type": "object",
+      "properties": {
+        "refresh": {
+          "type": "string",
+          "maxLength": 24,
+          "minLength": 2,
+          "pattern": "^(?:(?:[5-9]|[1-9][0-9]+)s|[1-9][0-9]*(?:m|h)|(?:[5-9][0-9]{3}|[1-9][0-9]{4,})ms)$",
+          "default": "15s"
+        },
+        "concurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16,
+          "default": 8
+        },
+        "read_timeout": {
+          "$ref": "#/$defs/duration",
+          "default": "10s"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "cron": {
+      "type": "object",
+      "properties": {
+        "env_file": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/abs_path"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path_extra": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 4096,
+            "minLength": 1,
+            "pattern": "^/[^:\\r\\n]{0,4095}$"
+          },
+          "maxItems": 32,
+          "default": []
+        },
+        "intervals": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/tool_name"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^(?:[0-9*/,-]+(?: [0-9*/,-]+){4}|@?[a-z][a-z0-9_-]{0,31})$"
+          },
+          "maxProperties": 256
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "doctor": {
+      "type": "object",
+      "properties": {
+        "probe_timeout": {
+          "$ref": "#/$defs/duration",
+          "default": "60s"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
     }
   },
-  "additionalProperties": true
+  "required": [],
+  "additionalProperties": false,
+  "$defs": {
+    "abs_path": {
+      "type": "string",
+      "maxLength": 4096,
+      "minLength": 1,
+      "pattern": "^/[^\\r\\n]{0,4095}$",
+      "description": "An absolute path. Full match."
+    },
+    "duration": {
+      "type": "string",
+      "maxLength": 24,
+      "minLength": 2,
+      "pattern": "^[1-9][0-9]*(?:ms|s|m|h)$",
+      "description": "A positive integer with the unit ms, s, m or h. Full match."
+    },
+    "tool_name": {
+      "type": "string",
+      "maxLength": 32,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9-]{0,31}$",
+      "description": "A tool name from the registry. Full match."
+    }
+  }
 }

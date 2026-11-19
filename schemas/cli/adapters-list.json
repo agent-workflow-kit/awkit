@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "awkit/cli/adapters-list.json",
+  "title": "adapters list --json",
+  "description": "Each loaded adapter with its source, tool, min_version and load status.",
+  "type": "object",
+  "properties": {
+    "adapters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "tool": {
+            "$ref": "../defs.json#/$defs/tool_name"
+          },
+          "source": {
+            "enum": [
+              "bundled",
+              "overlay"
+            ]
+          },
+          "path": {
+            "$ref": "../defs.json#/$defs/abs_path"
+          },
+          "min_version": {
+            "oneOf": [
+              {
+                "$ref": "../defs.json#/$defs/version"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "enum": [
+              "loaded",
+              "failed"
+            ]
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "string",
+                "maxLength": 1000,
+                "minLength": 0,
+                "x-untrusted": true
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "tool",
+          "source",
+          "path",
+          "min_version",
+          "status",
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 256
+    }
+  },
+  "required": [
+    "adapters"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "awkit/cli/wire.json",
+  "title": "wire --json",
+  "description": "Outcome of wiring one tool. files lists each drop-in considered (the tool's hook drop-in and, for notice-route, the rule drop-in) with the exact text. nothing_to_wire exits 0 with no files.",
+  "type": "object",
+  "properties": {
+    "tool": {
+      "$ref": "../defs.json#/$defs/tool_name"
+    },
+    "dry_run": {
+      "type": "boolean"
+    },
+    "outcome": {
+      "enum": [
+        "wired",
+        "replaced",
+        "unchanged",
+        "nothing_to_wire"
+      ]
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "$ref": "../defs.json#/$defs/abs_path"
+          },
+          "role": {
+            "enum": [
+              "hooks",
+              "notice_route_rules"
+            ]
+          },
+          "outcome": {
+            "enum": [
+              "wired",
+              "replaced",
+              "unchanged",
+              "nothing_to_wire"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 1000000,
+            "minLength": 0,
+            "x-untrusted": true,
+            "description": "The exact drop-in text (shown for wire, and with --dry-run)."
+          }
+        },
+        "required": [
+          "path",
+          "role",
+          "outcome"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 8
+    }
+  },
+  "required": [
+    "tool",
+    "dry_run",
+    "outcome",
+    "files"
+  ],
+  "additionalProperties": false
+}

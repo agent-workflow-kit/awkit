@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "awkit/cli/audit.json",
+  "title": "audit --json",
+  "description": "The merged timeline by ts. Without --no-pair a record with an attempt_id is paired with the other record sharing it (pairing paired, records of 2); an attempted record with no outcome is pairing unknown and stands alone; with --no-pair every entry is unpaired. skipped_lines counts malformed lines per tool.",
+  "type": "object",
+  "properties": {
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "tool": {
+            "$ref": "../defs.json#/$defs/tool_name"
+          },
+          "ts": {
+            "$ref": "../defs.json#/$defs/ts"
+          },
+          "attempt_id": {
+            "oneOf": [
+              {
+                "$ref": "../defs.json#/$defs/attempt_id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pairing": {
+            "enum": [
+              "paired",
+              "unpaired",
+              "unknown"
+            ]
+          },
+          "records": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": true
+            },
+            "minItems": 1,
+            "maxItems": 2,
+            "x-untrusted": true,
+            "description": "The sanitized tool records as read; each is valid against the schema the adapter names."
+          }
+        },
+        "required": [
+          "tool",
+          "ts",
+          "attempt_id",
+          "pairing",
+          "records"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 1000000
+    },
+    "skipped_lines": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "../defs.json#/$defs/tool_name"
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    }
+  },
+  "required": [
+    "records",
+    "skipped_lines"
+  ],
+  "additionalProperties": false
+}

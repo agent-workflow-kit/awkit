@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "awkit/cli/cron-uninstall.json",
+  "title": "cron uninstall --json",
+  "description": "Per-tool outcome in registry order. With --dry-run nothing is written and diff holds the unified text change. A malformed block exits 20 with the error envelope instead.",
+  "type": "object",
+  "properties": {
+    "dry_run": {
+      "type": "boolean"
+    },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "tool": {
+            "$ref": "../defs.json#/$defs/tool_name"
+          },
+          "outcome": {
+            "enum": [
+              "removed",
+              "unchanged"
+            ]
+          }
+        },
+        "required": [
+          "tool",
+          "outcome"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 256
+    },
+    "diff": {
+      "type": "string",
+      "maxLength": 4000000,
+      "minLength": 0,
+      "x-untrusted": true,
+      "description": "Unified text change; only with --dry-run. Contains foreign crontab lines."
+    }
+  },
+  "required": [
+    "dry_run",
+    "tools"
+  ],
+  "additionalProperties": false
+}

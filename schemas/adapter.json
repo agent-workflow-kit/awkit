@@ -1,0 +1,868 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "awkit/adapter.json",
+  "title": "awkit adapter file",
+  "description": "One YAML file <tool>.yaml per tool. Also holds the awkit-adapter/1 request and reply as $defs/request and $defs/reply.",
+  "type": "object",
+  "properties": {
+    "tool": {
+      "$ref": "defs.json#/$defs/tool_name"
+    },
+    "binding": {
+      "const": "C"
+    },
+    "bin": {
+      "type": "string",
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._+-]{1,128}$",
+      "description": "Default program name; tools.<tool>.bin overrides it with an absolute path."
+    },
+    "install": {
+      "type": "string",
+      "maxLength": 1000,
+      "minLength": 1,
+      "description": "The install command doctor prints for a missing tool."
+    },
+    "min_version": {
+      "$ref": "defs.json#/$defs/version"
+    },
+    "version": {
+      "$ref": "#/$defs/version"
+    },
+    "reads": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "defs.json#/$defs/name_id"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/read"
+      },
+      "maxProperties": 64
+    },
+    "attention": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/attention_rule"
+      },
+      "maxItems": 128
+    },
+    "links": {
+      "$ref": "#/$defs/links"
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/action"
+      },
+      "maxItems": 128
+    },
+    "periodic": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/periodic"
+      },
+      "maxItems": 16
+    },
+    "audit": {
+      "$ref": "#/$defs/audit"
+    },
+    "doctor": {
+      "$ref": "#/$defs/doctor"
+    },
+    "wire": {
+      "$ref": "#/$defs/wire"
+    },
+    "overrides": {
+      "$ref": "#/$defs/overrides"
+    }
+  },
+  "required": [
+    "tool",
+    "binding",
+    "bin"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "path": {
+      "type": "string",
+      "maxLength": 256,
+      "minLength": 1,
+      "pattern": "^(?:[A-Za-z_][A-Za-z0-9_-]*|\\[(?:[*]|[0-9]+|[?][A-Za-z_][A-Za-z0-9_-]*(?:=|!=)[^\\]]{0,128})\\])(?:\\[(?:[*]|[0-9]+|[?][A-Za-z_][A-Za-z0-9_-]*(?:=|!=)[^\\]]{0,128})\\]|[.][A-Za-z_][A-Za-z0-9_-]*)*$",
+      "description": "A path of the path language: member access a.b.c, [*], [?field=value] or [?field!=value] (one equality filter per step), [0]; steps compose. No functions, arithmetic or regular expressions. Full match."
+    },
+    "argv": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 1024,
+        "minLength": 1
+      },
+      "minItems": 1,
+      "maxItems": 64,
+      "description": "A command as an argv list; never a shell string. Placeholders {name} are filled from declared params only."
+    },
+    "param": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": [
+            "object_id",
+            "repo_id",
+            "pr_id",
+            "ticket_key",
+            "hash",
+            "enum"
+          ]
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1
+          },
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false,
+      "if": {
+        "properties": {
+          "type": {
+            "const": "enum"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "required": [
+          "values"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "values"
+          ]
+        }
+      },
+      "description": "A declared parameter with its closed grammar; a value that does not match refuses the call."
+    },
+    "params": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "defs.json#/$defs/name_id"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/param"
+      },
+      "maxProperties": 32
+    },
+    "map_field": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/path"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "path": {
+              "$ref": "#/$defs/path"
+            },
+            "required": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "A mapped model field: a path, or a path with required (a missing required field marks the tool stale)."
+    },
+    "read": {
+      "type": "object",
+      "properties": {
+        "argv": {
+          "$ref": "#/$defs/argv"
+        },
+        "json": {
+          "type": "boolean"
+        },
+        "timeout": {
+          "$ref": "defs.json#/$defs/duration"
+        },
+        "params": {
+          "$ref": "#/$defs/params"
+        },
+        "map": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "defs.json#/$defs/name_id"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/map_field"
+          },
+          "minProperties": 1,
+          "maxProperties": 64
+        }
+      },
+      "required": [
+        "argv",
+        "map"
+      ],
+      "additionalProperties": false,
+      "description": "A named, read-only command. Runs with the inherited environment, no stdin, in a new session, never with a terminal."
+    },
+    "version": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "package": {
+              "type": "string",
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._+-]{1,128}$"
+            }
+          },
+          "required": [
+            "package"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "argv": {
+              "$ref": "#/$defs/argv"
+            }
+          },
+          "required": [
+            "argv"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "package: <distribution name> (package metadata, the default method) or argv of a command that prints the version."
+    },
+    "attention_rule": {
+      "type": "object",
+      "properties": {
+        "read": {
+          "$ref": "defs.json#/$defs/name_id"
+        },
+        "where": {
+          "$ref": "#/$defs/path"
+        },
+        "reason": {
+          "$ref": "defs.json#/$defs/code"
+        },
+        "severity": {
+          "$ref": "defs.json#/$defs/severity"
+        },
+        "id": {
+          "$ref": "#/$defs/path"
+        },
+        "title": {
+          "$ref": "#/$defs/path"
+        },
+        "since": {
+          "$ref": "#/$defs/path"
+        }
+      },
+      "required": [
+        "read",
+        "reason",
+        "severity",
+        "id",
+        "title"
+      ],
+      "additionalProperties": false
+    },
+    "links": {
+      "type": "object",
+      "properties": {
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "$ref": "defs.json#/$defs/label_key"
+              },
+              "kind": {
+                "$ref": "defs.json#/$defs/node_kind"
+              },
+              "tool": {
+                "$ref": "defs.json#/$defs/tool_name"
+              }
+            },
+            "required": [
+              "key",
+              "kind"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 64,
+          "description": "Label keys that join an object to an object of another kind (tag label)."
+        },
+        "branches": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1
+              },
+              "kind": {
+                "$ref": "defs.json#/$defs/node_kind"
+              },
+              "tool": {
+                "$ref": "defs.json#/$defs/tool_name"
+              }
+            },
+            "required": [
+              "pattern",
+              "kind"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 64,
+          "description": "Branch-name patterns that join an object to an object of another kind (tag branch)."
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "$ref": "defs.json#/$defs/name_id"
+              },
+              "from": {
+                "$ref": "#/$defs/path"
+              },
+              "kind": {
+                "$ref": "defs.json#/$defs/node_kind"
+              },
+              "to": {
+                "$ref": "#/$defs/path"
+              },
+              "tool": {
+                "$ref": "defs.json#/$defs/tool_name"
+              }
+            },
+            "required": [
+              "read",
+              "from",
+              "kind",
+              "to"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 64,
+          "description": "Stored ids of another object a read maps (tag record)."
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "recipe": {
+      "type": "object",
+      "properties": {
+        "dry_run": {
+          "$ref": "#/$defs/argv"
+        },
+        "show": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/path"
+          },
+          "minItems": 1,
+          "maxItems": 32
+        },
+        "pass": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "flag": {
+                "type": "string",
+                "maxLength": 66,
+                "minLength": 3,
+                "pattern": "^--[a-z][a-z0-9-]{0,63}$"
+              },
+              "from": {
+                "$ref": "#/$defs/path"
+              }
+            },
+            "required": [
+              "flag"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 16,
+          "description": "Flags passed to the real command; from names the dry-run field whose value follows the flag (a plan hash, an expected head or base, a content hash)."
+        },
+        "yes": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "dry_run",
+        "show"
+      ],
+      "additionalProperties": false,
+      "description": "The confirmation recipe: dry run, shown fields, passed fields, and whether the tool takes --yes."
+    },
+    "action": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "defs.json#/$defs/name_id"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 200,
+          "minLength": 1
+        },
+        "applies_to": {
+          "$ref": "defs.json#/$defs/name_id"
+        },
+        "argv": {
+          "$ref": "#/$defs/argv"
+        },
+        "params": {
+          "$ref": "#/$defs/params"
+        },
+        "destructive": {
+          "type": "boolean"
+        },
+        "reverify": {
+          "type": "boolean"
+        },
+        "recipe": {
+          "$ref": "#/$defs/recipe"
+        },
+        "terminal": {
+          "const": true
+        },
+        "actor_charset": {
+          "type": "string",
+          "maxLength": 128,
+          "minLength": 1,
+          "description": "Character class of the tool's own actor grammar the user is fitted to."
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "applies_to",
+        "argv",
+        "destructive",
+        "reverify"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "recipe"
+          ]
+        },
+        {
+          "required": [
+            "terminal"
+          ]
+        }
+      ],
+      "additionalProperties": false,
+      "description": "A named operation on an object: either a recipe or terminal true."
+    },
+    "block": {
+      "type": "object",
+      "properties": {
+        "first_line": {
+          "type": "string",
+          "maxLength": 1000,
+          "minLength": 1,
+          "pattern": "^[^\\r\\n]{1,1000}$"
+        },
+        "end_line": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 1000,
+              "minLength": 1,
+              "pattern": "^[^\\r\\n]{1,1000}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "match": {
+          "enum": [
+            "exact",
+            "prefix",
+            "regex"
+          ]
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "pattern": "^[^\\r\\n]{1,1000}$"
+          },
+          "minItems": 1,
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "first_line",
+        "end_line",
+        "match",
+        "strict",
+        "lines"
+      ],
+      "additionalProperties": false,
+      "description": "The block grammar of one tool (see Block grammar). Templates take {minute}, {bin}, {path}, {env_prefix} and the entry's params."
+    },
+    "periodic": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "defs.json#/$defs/name_id"
+        },
+        "schedule": {
+          "type": "string",
+          "maxLength": 128,
+          "minLength": 9,
+          "pattern": "^[0-9*/,-]+(?: [0-9*/,-]+){4}$"
+        },
+        "shorthands": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{0,31}$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 9,
+            "pattern": "^[0-9*/,-]+(?: [0-9*/,-]+){4}$"
+          },
+          "maxProperties": 16
+        },
+        "env_file": {
+          "type": "boolean"
+        },
+        "params": {
+          "$ref": "#/$defs/params"
+        },
+        "block": {
+          "$ref": "#/$defs/block"
+        }
+      },
+      "required": [
+        "schedule",
+        "block"
+      ],
+      "additionalProperties": false,
+      "description": "One cron entry. schedule is the default; cron.intervals.<tool> overrides it with a cron expression or one of shorthands."
+    },
+    "audit": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 1024,
+          "minLength": 1,
+          "pattern": "^(?:~/|/)[^\\r\\n]{1,1022}$",
+          "description": "Default ~/.local/state/<tool>/audit.jsonl under the password-database home."
+        },
+        "schema": {
+          "type": "string",
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^[^\\r\\n]{1,1000}$",
+          "description": "The schema each line is validated against, named as the adapter ships it."
+        }
+      },
+      "required": [
+        "schema"
+      ],
+      "additionalProperties": false
+    },
+    "doctor": {
+      "type": "object",
+      "properties": {
+        "validate": {
+          "$ref": "#/$defs/argv"
+        },
+        "probe": {
+          "$ref": "#/$defs/argv"
+        },
+        "env": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Z_][A-Z0-9_]{0,63}$"
+          },
+          "maxItems": 64,
+          "uniqueItems": true,
+          "description": "Variable names required in a non-interactive shell and in the cron env file."
+        },
+        "needs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._+-]{1,128}$"
+          },
+          "maxItems": 16,
+          "uniqueItems": true,
+          "description": "Programs the tool needs (bwrap, socat)."
+        },
+        "pair": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "defs.json#/$defs/name_id"
+              },
+              "tool": {
+                "$ref": "defs.json#/$defs/tool_name"
+              },
+              "min_version": {
+                "$ref": "defs.json#/$defs/version"
+              }
+            },
+            "required": [
+              "id",
+              "tool",
+              "min_version"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 32,
+          "description": "Sibling rules; the check id is pair.<id>."
+        }
+      },
+      "required": [],
+      "additionalProperties": false,
+      "description": "The tool's own offline validate argv, its probe argv and extra checks."
+    },
+    "wire": {
+      "type": "object",
+      "properties": {
+        "hooks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 6,
+                "pattern": "^(?:pre|post)-[a-z][a-z0-9-]{0,63}$"
+              },
+              "state": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 32,
+          "description": "Hooks routed to notice-route send; state true marks a state hook (agent-spawn and claude-session may not both be wired)."
+        },
+        "rules": {
+          "type": "string",
+          "maxLength": 65536,
+          "minLength": 1,
+          "description": "notice-route's adapter only: the text of the rule drop-in."
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "override": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "python": {
+              "type": "string",
+              "maxLength": 384,
+              "minLength": 3,
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.]{0,255}:[A-Za-z_][A-Za-z0-9_]{0,127}$"
+            }
+          },
+          "required": [
+            "python"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "exec": {
+              "$ref": "defs.json#/$defs/abs_path"
+            }
+          },
+          "required": [
+            "exec"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "python: module:function or exec: absolute path of an executable that speaks awkit-adapter/1."
+    },
+    "overrides": {
+      "type": "object",
+      "properties": {
+        "adapter": {
+          "$ref": "#/$defs/override"
+        },
+        "read": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "defs.json#/$defs/name_id"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/override"
+          }
+        },
+        "attention": {
+          "$ref": "#/$defs/override"
+        },
+        "links": {
+          "$ref": "#/$defs/override"
+        },
+        "action": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "defs.json#/$defs/name_id"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/override"
+          }
+        }
+      },
+      "required": [],
+      "additionalProperties": false,
+      "description": "Any single operation or the whole adapter can be replaced; read and action are keyed by read name and action id."
+    },
+    "request": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "awkit-adapter/1"
+        },
+        "operation": {
+          "enum": [
+            "read",
+            "attention",
+            "links",
+            "action"
+          ]
+        },
+        "adapter": {
+          "$ref": "defs.json#/$defs/tool_name"
+        },
+        "params": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": true,
+          "x-untrusted": true
+        }
+      },
+      "required": [
+        "protocol",
+        "operation",
+        "adapter",
+        "params"
+      ],
+      "additionalProperties": false,
+      "description": "The request an executable override reads on standard input."
+    },
+    "reply": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "result": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": true,
+              "x-untrusted": true
+            }
+          },
+          "required": [
+            "ok",
+            "result"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": false
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "$ref": "defs.json#/$defs/code"
+                },
+                "message": {
+                  "type": "string",
+                  "maxLength": 1000,
+                  "minLength": 0,
+                  "x-untrusted": true
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "The reply an executable override writes on standard output."
+    }
+  }
+}

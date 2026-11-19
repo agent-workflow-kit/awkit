@@ -1,47 +1,157 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "awkit/audit",
+  "$id": "awkit/audit.json",
   "title": "awkit audit.jsonl record",
-  "description": "Audit record for awkit. Whether this tool writes audit records is decided in its design session (architecture §14).",
+  "description": "Public, append-only. awkit audits only what it alone does (cron.install, cron.uninstall, wire, unwire): an attempted record before any change and an outcome record after it, sharing attempt_id. inputs hold hashes, never the text. There is no decision_id (awkit takes no gate decision in 0.x); no title, body or tool text.",
   "type": "object",
   "properties": {
     "ts": {
-      "type": "string",
-      "format": "date-time"
+      "$ref": "defs.json#/$defs/ts"
+    },
+    "phase": {
+      "enum": [
+        "attempted",
+        "outcome"
+      ]
+    },
+    "attempt_id": {
+      "$ref": "defs.json#/$defs/attempt_id"
     },
     "actor": {
-      "type": "string"
+      "$ref": "defs.json#/$defs/actor"
     },
-    "decision_id": {
-      "oneOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
+    "actor_source": {
+      "enum": [
+        "flag",
+        "tty",
+        "default"
+      ],
+      "description": "flag (--actor), tty (the human default with a terminal), default (auto:unknown)."
+    },
+    "stdin_tty": {
+      "type": "boolean"
+    },
+    "action": {
+      "enum": [
+        "cron.install",
+        "cron.uninstall",
+        "wire",
+        "unwire"
       ]
     },
     "target": {
-      "type": "string"
-    },
-    "action": {
-      "type": "string"
+      "type": "string",
+      "maxLength": 4096,
+      "minLength": 1,
+      "pattern": "^(?:crontab|/[^\\r\\n]{1,4095})$",
+      "description": "The literal crontab, or the absolute path of the drop-in."
     },
     "inputs": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "defs.json#/$defs/tool_name"
+          },
+          "minItems": 1,
+          "maxItems": 256,
+          "uniqueItems": true
+        },
+        "before_sha256": {
+          "oneOf": [
+            {
+              "$ref": "defs.json#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "after_sha256": {
+          "oneOf": [
+            {
+              "$ref": "defs.json#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "tools",
+        "before_sha256",
+        "after_sha256"
+      ],
+      "additionalProperties": false
     },
-    "result": {}
+    "result": {
+      "type": "object",
+      "properties": {
+        "outcome": {
+          "enum": [
+            "attempted",
+            "done",
+            "failed",
+            "unknown"
+          ]
+        },
+        "code": {
+          "oneOf": [
+            {
+              "$ref": "defs.json#/$defs/code"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "tool": {
+                "$ref": "defs.json#/$defs/tool_name"
+              },
+              "outcome": {
+                "enum": [
+                  "installed",
+                  "replaced",
+                  "unchanged",
+                  "removed",
+                  "wired",
+                  "nothing_to_wire"
+                ]
+              }
+            },
+            "required": [
+              "tool",
+              "outcome"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 256
+        }
+      },
+      "required": [
+        "outcome"
+      ],
+      "additionalProperties": false
+    }
   },
   "required": [
     "ts",
+    "phase",
+    "attempt_id",
     "actor",
-    "target",
+    "actor_source",
+    "stdin_tty",
     "action",
+    "target",
+    "inputs",
     "result"
   ],
-  "additionalProperties": true
+  "additionalProperties": false
 }

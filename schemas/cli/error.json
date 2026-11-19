@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "awkit/cli/error.json",
+  "title": "Error envelope (any command with --json)",
+  "description": "Printed on stdout for every non-zero exit except doctor's exit 12, which prints the doctor document.",
+  "$ref": "../defs.json#/$defs/error"
+}

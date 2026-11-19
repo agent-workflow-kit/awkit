@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "awkit/cli/doctor.json",
+  "title": "doctor --json",
+  "description": "Printed with exit 0 and with exit 12 (checks_failed). Same document as doctor-last.json.",
+  "$ref": "../defs.json#/$defs/doctor_result"
+}

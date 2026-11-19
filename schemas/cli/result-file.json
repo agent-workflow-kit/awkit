@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "awkit/cli/result-file.json",
+  "title": "browse --result-file document",
+  "description": "Written by awkit dashboard and awkit browse on exit 0 when --result-file is given (temporary file, sync, rename, mode 0600). Not stdout JSON: dashboard and browse print nothing with --json.",
+  "type": "object",
+  "properties": {
+    "intent": {
+      "enum": [
+        "open",
+        "back"
+      ]
+    },
+    "selected": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "tool": {
+            "$ref": "../defs.json#/$defs/tool_name"
+          },
+          "object": {
+            "$ref": "../defs.json#/$defs/object_id"
+          }
+        },
+        "required": [
+          "tool",
+          "object"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 256
+    }
+  },
+  "required": [
+    "intent",
+    "selected"
+  ],
+  "additionalProperties": false
+}

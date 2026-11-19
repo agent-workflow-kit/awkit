@@ -1,0 +1,501 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "awkit/defs.json",
+  "title": "awkit shared definitions",
+  "$defs": {
+    "tool_name": {
+      "type": "string",
+      "maxLength": 32,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9-]{0,31}$",
+      "description": "A tool name from the registry. Full match."
+    },
+    "name_id": {
+      "type": "string",
+      "maxLength": 64,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+      "description": "A closed lowercase identifier (read name, action id, rule id). Full match."
+    },
+    "code": {
+      "type": "string",
+      "maxLength": 64,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9_]{0,63}$",
+      "description": "A closed lowercase code with underscores. Full match."
+    },
+    "actor": {
+      "type": "string",
+      "maxLength": 70,
+      "minLength": 7,
+      "pattern": "^(?:human|auto):[A-Za-z0-9._@-]{1,64}$",
+      "description": "human:<user> or auto:<name>. Full match."
+    },
+    "ts": {
+      "type": "string",
+      "maxLength": 32,
+      "minLength": 20,
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:[.][0-9]{1,6})?Z$",
+      "description": "UTC timestamp, YYYY-MM-DDTHH:MM:SS[.ffffff]Z. Full match."
+    },
+    "sha256": {
+      "type": "string",
+      "maxLength": 64,
+      "minLength": 64,
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Lowercase hex SHA-256. Full match."
+    },
+    "attempt_id": {
+      "type": "string",
+      "maxLength": 64,
+      "minLength": 8,
+      "pattern": "^[A-Za-z0-9_-]{8,64}$",
+      "description": "Pairs an attempted record with its outcome. Full match."
+    },
+    "duration": {
+      "type": "string",
+      "maxLength": 24,
+      "minLength": 2,
+      "pattern": "^[1-9][0-9]*(?:ms|s|m|h)$",
+      "description": "A positive integer with the unit ms, s, m or h. Full match."
+    },
+    "abs_path": {
+      "type": "string",
+      "maxLength": 4096,
+      "minLength": 1,
+      "pattern": "^/[^\\r\\n]{0,4095}$",
+      "description": "An absolute path. Full match."
+    },
+    "version": {
+      "type": "string",
+      "maxLength": 64,
+      "minLength": 1,
+      "pattern": "^[0-9][A-Za-z0-9.+_-]{0,63}$",
+      "description": "A tool version string. Full match."
+    },
+    "object_id": {
+      "type": "string",
+      "maxLength": 256,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@/#=+~-]{0,255}$",
+      "description": "An object id as the owning tool prints it. Full match.",
+      "x-untrusted": true
+    },
+    "focus_id": {
+      "type": "string",
+      "maxLength": 300,
+      "minLength": 3,
+      "pattern": "^[a-z][a-z0-9-]{0,31}:[A-Za-z0-9][A-Za-z0-9._:@/#=+~-]{0,255}$",
+      "description": "<tool>:<object>, the --focus argument. Full match."
+    },
+    "node_kind": {
+      "enum": [
+        "ticket",
+        "worktree",
+        "agent",
+        "tmux_window",
+        "job",
+        "pull_request",
+        "review_draft",
+        "gate_decision",
+        "notification"
+      ]
+    },
+    "severity": {
+      "enum": [
+        "info",
+        "action",
+        "error"
+      ]
+    },
+    "link_source": {
+      "enum": [
+        "record",
+        "forge",
+        "branch",
+        "label"
+      ]
+    },
+    "label_key": {
+      "enum": [
+        "ticket",
+        "pr",
+        "repo",
+        "kind",
+        "owner",
+        "job",
+        "rw-item",
+        "draft",
+        "consumer"
+      ]
+    },
+    "object_ref": {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "$ref": "#/$defs/tool_name"
+        },
+        "object": {
+          "$ref": "#/$defs/object_id"
+        },
+        "kind": {
+          "$ref": "#/$defs/node_kind"
+        }
+      },
+      "required": [
+        "tool",
+        "object"
+      ],
+      "additionalProperties": false,
+      "description": "One object of one tool. kind is present on chain nodes and links."
+    },
+    "link": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/object_ref"
+        },
+        "to": {
+          "$ref": "#/$defs/object_ref"
+        },
+        "source": {
+          "$ref": "#/$defs/link_source"
+        }
+      },
+      "required": [
+        "from",
+        "to",
+        "source"
+      ],
+      "additionalProperties": false,
+      "description": "A link between two objects of different tools with its source tag."
+    },
+    "action_ref": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/name_id"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 200,
+          "minLength": 1,
+          "x-untrusted": true
+        },
+        "destructive": {
+          "type": "boolean"
+        },
+        "terminal": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "destructive"
+      ],
+      "additionalProperties": false,
+      "description": "An action an adapter offers for an item (see Actions)."
+    },
+    "attention_item": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 400,
+          "minLength": 5,
+          "x-untrusted": true,
+          "description": "<tool>:<reason>:<object>."
+        },
+        "tool": {
+          "$ref": "#/$defs/tool_name"
+        },
+        "reason": {
+          "$ref": "#/$defs/code"
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200,
+          "minLength": 0,
+          "x-untrusted": true,
+          "description": "Sanitized; cut at 200 code points."
+        },
+        "object": {
+          "$ref": "#/$defs/object_id"
+        },
+        "since": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ts"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/link"
+          },
+          "maxItems": 256
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/action_ref"
+          },
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "id",
+        "tool",
+        "reason",
+        "severity",
+        "title",
+        "object",
+        "since",
+        "links",
+        "actions"
+      ],
+      "additionalProperties": false
+    },
+    "chain_node": {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "$ref": "#/$defs/tool_name"
+        },
+        "object": {
+          "$ref": "#/$defs/object_id"
+        },
+        "kind": {
+          "$ref": "#/$defs/node_kind"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200,
+          "minLength": 0,
+          "x-untrusted": true
+        }
+      },
+      "required": [
+        "tool",
+        "object",
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "chain": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/chain_node"
+          },
+          "minItems": 1,
+          "maxItems": 64
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/link"
+          },
+          "maxItems": 256
+        }
+      },
+      "required": [
+        "nodes",
+        "links"
+      ],
+      "additionalProperties": false,
+      "description": "Nodes (ticket, agent, pull request, review, ...) and the links between them, each with its tag."
+    },
+    "error_reason": {
+      "enum": [
+        "config_unsafe",
+        "adapter_invalid",
+        "malformed_block",
+        "drop_in_foreign",
+        "duplicate_state_hooks",
+        "stale_object",
+        "link_unverified",
+        "unsupported_platform",
+        "locked"
+      ]
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "$ref": "#/$defs/code"
+            },
+            "message": {
+              "type": "string",
+              "maxLength": 1000,
+              "minLength": 0,
+              "x-untrusted": true
+            },
+            "reason": {
+              "$ref": "#/$defs/error_reason"
+            },
+            "details": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": true,
+              "x-untrusted": true
+            }
+          },
+          "required": [
+            "code",
+            "message"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "error"
+      ],
+      "additionalProperties": false,
+      "description": "The envelope printed on stdout for every non-zero exit except doctor's exit 12. reason is present for exit 20 and for exit 12 where the table names one; details.candidates lists the candidates of exit 21."
+    },
+    "doctor_status": {
+      "enum": [
+        "ok",
+        "warn",
+        "fail"
+      ]
+    },
+    "doctor_check": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 96,
+          "minLength": 1,
+          "pattern": "^(?:config[.]safe|adapter[.]loaded|tool[.]installed|tool[.]version|tool[.]validate|cron[.]daemon|cron[.]block|cron[.]path|cron[.]env_file|cron[.]lines|env[.]variables|sandbox[.]tools|audit[.]coverage|pair[.][a-z][a-z0-9_-]{0,63}|probe[.][a-z][a-z0-9-]{0,31})$"
+        },
+        "tool": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/tool_name"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/doctor_status"
+        },
+        "reason": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 1000,
+              "minLength": 0,
+              "x-untrusted": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "details": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": true,
+          "x-untrusted": true
+        }
+      },
+      "required": [
+        "id",
+        "tool",
+        "status",
+        "reason",
+        "details"
+      ],
+      "additionalProperties": false
+    },
+    "doctor_result": {
+      "type": "object",
+      "properties": {
+        "ts": {
+          "$ref": "#/$defs/ts"
+        },
+        "probe": {
+          "type": "boolean"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/doctor_check"
+          },
+          "maxItems": 2000
+        },
+        "counts": {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warn": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "fail": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "ok",
+            "warn",
+            "fail"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "ts",
+        "probe",
+        "checks",
+        "counts"
+      ],
+      "additionalProperties": false,
+      "description": "The result of one doctor run. Also the content of doctor-last.json. Exit 12 prints the same document."
+    },
+    "cron_tool_outcome": {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "$ref": "#/$defs/tool_name"
+        },
+        "outcome": {
+          "enum": [
+            "installed",
+            "replaced",
+            "unchanged",
+            "removed"
+          ]
+        }
+      },
+      "required": [
+        "tool",
+        "outcome"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

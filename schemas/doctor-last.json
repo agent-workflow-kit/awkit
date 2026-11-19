@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "awkit/doctor-last.json",
+  "title": "awkit doctor-last.json",
+  "description": "The last doctor result, written atomically to the state directory for the dashboard badge. Same document as doctor --json.",
+  "$ref": "defs.json#/$defs/doctor_result"
+}

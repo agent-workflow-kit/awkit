@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "awkit/cli/adapters-show.json",
+  "title": "adapters show --json",
+  "description": "One adapter after loading, with the effective values (cron intervals and bin from the config applied).",
+  "type": "object",
+  "properties": {
+    "tool": {
+      "$ref": "../defs.json#/$defs/tool_name"
+    },
+    "source": {
+      "enum": [
+        "bundled",
+        "overlay"
+      ]
+    },
+    "path": {
+      "$ref": "../defs.json#/$defs/abs_path"
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "bin": {
+      "oneOf": [
+        {
+          "$ref": "../defs.json#/$defs/abs_path"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "adapter": {
+      "$ref": "../adapter.json"
+    }
+  },
+  "required": [
+    "tool",
+    "source",
+    "path",
+    "enabled",
+    "bin",
+    "adapter"
+  ],
+  "additionalProperties": false
+}
