@@ -1,0 +1,1604 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "awkit/adapter.json",
+  "title": "awkit adapter file",
+  "description": "One YAML file <tool>.yaml per tool. Also holds the awkit-adapter/1 request and reply as $defs/request and $defs/reply.",
+  "type": "object",
+  "properties": {
+    "tool": {
+      "$ref": "defs.json#/$defs/tool_name",
+      "not": {
+        "const": "awkit"
+      }
+    },
+    "binding": {
+      "const": "C"
+    },
+    "bin": {
+      "type": "string",
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._+-]{1,128}(?![\\s\\S])",
+      "description": "The program name, never a path; tools.<tool>.bin overrides it with an absolute path."
+    },
+    "install": {
+      "type": "string",
+      "maxLength": 1000,
+      "minLength": 1,
+      "description": "The install command doctor prints for a missing tool."
+    },
+    "min_version": {
+      "$ref": "defs.json#/$defs/version"
+    },
+    "version": {
+      "$ref": "#/$defs/version"
+    },
+    "reads": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "defs.json#/$defs/name_id"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/read"
+      },
+      "maxProperties": 64
+    },
+    "attention": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/attention_rule"
+      },
+      "maxItems": 128
+    },
+    "links": {
+      "$ref": "#/$defs/links"
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/action"
+      },
+      "maxItems": 128
+    },
+    "tui": {
+      "$ref": "#/$defs/tui"
+    },
+    "cron": {
+      "$ref": "#/$defs/cron"
+    },
+    "audit": {
+      "$ref": "#/$defs/audit"
+    },
+    "doctor": {
+      "$ref": "#/$defs/doctor"
+    },
+    "wire": {
+      "$ref": "#/$defs/wire"
+    },
+    "overrides": {
+      "$ref": "#/$defs/overrides"
+    }
+  },
+  "required": [
+    "tool",
+    "binding",
+    "bin"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "path": {
+      "type": "string",
+      "maxLength": 256,
+      "minLength": 1,
+      "pattern": "^(?:[A-Za-z_][A-Za-z0-9_-]*|\\[(?:[*]|[0-9]+|[?][A-Za-z_][A-Za-z0-9_-]*(?:=|!=)[^\\]]{1,128})\\])(?:\\[(?:[*]|[0-9]+|[?][A-Za-z_][A-Za-z0-9_-]*(?:=|!=)[^\\]]{1,128})\\]|[.][A-Za-z_][A-Za-z0-9_-]*)*(?![\\s\\S])",
+      "description": "A path of the path language: member access a.b.c, [*], [N], and one equality filter [?field=value] or [?field!=value] per step; steps compose. Typed literals: null, true, false and integers compare to JSON null, booleans and integers; anything else is a string taken verbatim up to 128 characters. No functions, arithmetic or regular expressions. Full match."
+    },
+    "argv": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "string",
+          "maxLength": 1024,
+          "minLength": 1,
+          "pattern": "^(?:[^{]|[{][{])*(?![\\s\\S])"
+        }
+      ],
+      "items": {
+        "type": "string",
+        "maxLength": 1024,
+        "minLength": 0,
+        "pattern": "^(?:[^{]|[{][{])*(?![\\s\\S])"
+      },
+      "minItems": 1,
+      "maxItems": 64,
+      "description": "A command as an argv list; never a shell string. Reads have no placeholders; a literal { is written {{. Items after the first may be empty."
+    },
+    "action_argv": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "string",
+          "maxLength": 1024,
+          "minLength": 1,
+          "pattern": "^(?:[{]object[}]|[{]actor[}]|[{]pass[.][a-z][a-z0-9_]{0,31}[}]|(?:[^{]|[{][{])*)(?![\\s\\S])"
+        }
+      ],
+      "items": {
+        "type": "string",
+        "maxLength": 1024,
+        "minLength": 0,
+        "pattern": "^(?:[{]object[}]|[{]actor[}]|[{]pass[.][a-z][a-z0-9_]{0,31}[}]|(?:[^{]|[{][{])*)(?![\\s\\S])"
+      },
+      "minItems": 1,
+      "maxItems": 64,
+      "description": "An action argv. Placeholders are whole elements from the closed set {object}, {actor} and {pass.<name>}; a literal { is written {{."
+    },
+    "tui_argv": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "string",
+          "maxLength": 1024,
+          "minLength": 1,
+          "pattern": "^(?:[{]object[}]|(?:[^{]|[{][{])*)(?![\\s\\S])"
+        }
+      ],
+      "items": {
+        "type": "string",
+        "maxLength": 1024,
+        "minLength": 0,
+        "pattern": "^(?:[{]object[}]|(?:[^{]|[{][{])*)(?![\\s\\S])"
+      },
+      "minItems": 1,
+      "maxItems": 64,
+      "description": "The argv that opens the tool's own TUI. {object} is the only placeholder and a whole element."
+    },
+    "eq": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{0,31}(?![\\s\\S])"
+      },
+      "additionalProperties": {
+        "type": [
+          "string",
+          "integer",
+          "boolean",
+          "null"
+        ]
+      },
+      "description": "One equality on a row field: {field: value}."
+    },
+    "read": {
+      "type": "object",
+      "properties": {
+        "argv": {
+          "$ref": "#/$defs/argv"
+        },
+        "timeout": {
+          "$ref": "defs.json#/$defs/duration"
+        },
+        "kind": {
+          "$ref": "defs.json#/$defs/node_kind"
+        },
+        "items": {
+          "$ref": "#/$defs/path"
+        },
+        "fields": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,31}(?![\\s\\S])"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/path"
+          },
+          "required": [
+            "id"
+          ],
+          "minProperties": 1,
+          "maxProperties": 32,
+          "description": "Row field name to a path relative to one element of items. id is required; title, since, labels, branch and state are reserved."
+        },
+        "truncated": {
+          "$ref": "#/$defs/path"
+        }
+      },
+      "required": [
+        "argv",
+        "kind",
+        "items",
+        "fields"
+      ],
+      "additionalProperties": false,
+      "description": "A named command that asks the tool to change nothing and prints JSON. Runs with the inherited environment, no stdin, in a new session, never with a terminal."
+    },
+    "version": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "package": {
+              "type": "string",
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._+-]{1,128}(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "package"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "argv": {
+              "$ref": "#/$defs/argv"
+            }
+          },
+          "required": [
+            "argv"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "package: <distribution name> (package metadata of the tool's own environment) or argv of a command that prints the version."
+    },
+    "attention_rule": {
+      "type": "object",
+      "properties": {
+        "read": {
+          "$ref": "defs.json#/$defs/name_id"
+        },
+        "reason": {
+          "$ref": "defs.json#/$defs/code"
+        },
+        "severity": {
+          "$ref": "defs.json#/$defs/severity"
+        },
+        "when": {
+          "$ref": "#/$defs/eq"
+        }
+      },
+      "required": [
+        "read",
+        "reason",
+        "severity"
+      ],
+      "additionalProperties": false,
+      "description": "Turns the rows of a read into Attention items; when keeps the rows whose field equals the value."
+    },
+    "links": {
+      "type": "object",
+      "properties": {
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "$ref": "defs.json#/$defs/name_id"
+              },
+              "key": {
+                "$ref": "defs.json#/$defs/label_key"
+              },
+              "to_kind": {
+                "$ref": "defs.json#/$defs/node_kind"
+              },
+              "to_tool": {
+                "$ref": "defs.json#/$defs/tool_name"
+              }
+            },
+            "required": [
+              "read",
+              "key",
+              "to_kind",
+              "to_tool"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 64,
+          "description": "Label values of row.labels[key] that name an object of another kind (tag label)."
+        },
+        "branches": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "$ref": "defs.json#/$defs/name_id"
+              },
+              "pattern": {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1
+              },
+              "to_kind": {
+                "$ref": "defs.json#/$defs/node_kind"
+              },
+              "to_tool": {
+                "$ref": "defs.json#/$defs/tool_name"
+              }
+            },
+            "required": [
+              "read",
+              "pattern",
+              "to_kind",
+              "to_tool"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 64,
+          "description": "A full-match pattern for row.branch; the group named ref names an object of another kind (tag branch)."
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "$ref": "defs.json#/$defs/name_id"
+              },
+              "field": {
+                "type": "string",
+                "maxLength": 32,
+                "minLength": 1,
+                "pattern": "^[a-z][a-z0-9_]{0,31}(?![\\s\\S])"
+              },
+              "to_kind": {
+                "$ref": "defs.json#/$defs/node_kind"
+              },
+              "to_tool": {
+                "$ref": "defs.json#/$defs/tool_name"
+              }
+            },
+            "required": [
+              "read",
+              "field",
+              "to_kind",
+              "to_tool"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 64,
+          "description": "A row field that stores the id of another object (tag record)."
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "pass": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 32,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_]{0,31}(?![\\s\\S])"
+        },
+        "flag": {
+          "type": "string",
+          "maxLength": 66,
+          "minLength": 3,
+          "pattern": "^--[a-z][a-z0-9-]{0,63}(?![\\s\\S])",
+          "not": {
+            "enum": [
+              "--yes",
+              "--dry-run",
+              "--actor",
+              "--force",
+              "--override-escalation",
+              "--allow-tainted"
+            ]
+          }
+        },
+        "from": {
+          "type": "string",
+          "maxLength": 300,
+          "minLength": 5,
+          "pattern": "^(?:dry_run[.](?:[A-Za-z_][A-Za-z0-9_-]*|\\[(?:[*]|[0-9]+|[?][A-Za-z_][A-Za-z0-9_-]*(?:=|!=)[^\\]]{1,128})\\])(?:\\[(?:[*]|[0-9]+|[?][A-Za-z_][A-Za-z0-9_-]*(?:=|!=)[^\\]]{1,128})\\]|[.][A-Za-z_][A-Za-z0-9_-]*)*|row[.][a-z][a-z0-9_]{0,31})(?![\\s\\S])",
+          "description": "dry_run.<path> or row.<field>."
+        },
+        "type": {
+          "enum": [
+            "hash",
+            "object_id",
+            "int",
+            "enum"
+          ]
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_][A-Za-z0-9._:@/#=+~*-]{0,127}(?![\\s\\S])"
+          },
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "name",
+        "from",
+        "type"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "enum"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "values"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "values"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "from": {
+                "pattern": "^dry_run[.]"
+              }
+            },
+            "required": [
+              "from"
+            ]
+          },
+          "then": {
+            "required": [
+              "flag"
+            ]
+          }
+        }
+      ],
+      "description": "A typed value: row.<field> values go into the dry run and the real command (appended with flag, or filling {pass.<name>} without one); dry_run.<path> values need flag and go into the real command only."
+    },
+    "recipe": {
+      "type": "object",
+      "properties": {
+        "dry_run": {
+          "type": "boolean"
+        },
+        "show": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/path"
+          },
+          "minItems": 1,
+          "maxItems": 32
+        },
+        "pass": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/pass"
+          },
+          "maxItems": 16
+        },
+        "yes": {
+          "type": "boolean"
+        },
+        "actor_charset": {
+          "type": "string",
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9._@-]{1,64}(?![\\s\\S])",
+          "description": "The characters of the tool's own actor grammar the user is fitted to: a subset of [A-Za-z0-9._@-]. The fitted actor is checked against the actor grammar again."
+        }
+      },
+      "required": [
+        "dry_run",
+        "show"
+      ],
+      "additionalProperties": false,
+      "description": "The confirmation recipe. The argv contains --json; with dry_run true awkit runs the argv plus the row pass values, --actor and --dry-run, never --yes."
+    },
+    "action": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "defs.json#/$defs/name_id"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 200,
+          "minLength": 1
+        },
+        "applies_to": {
+          "type": "array",
+          "items": {
+            "$ref": "defs.json#/$defs/code"
+          },
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "when": {
+          "$ref": "#/$defs/eq"
+        },
+        "argv": {
+          "$ref": "#/$defs/action_argv"
+        },
+        "destructive": {
+          "type": "boolean"
+        },
+        "recipe": {
+          "$ref": "#/$defs/recipe"
+        },
+        "terminal": {
+          "const": true
+        },
+        "human_flag": {
+          "enum": [
+            "--allow-tainted"
+          ],
+          "description": "The one reserved human flag 0.x passes; shown in the dialog chrome."
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "applies_to",
+        "argv",
+        "destructive"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "recipe"
+          ]
+        },
+        {
+          "required": [
+            "terminal"
+          ]
+        }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "destructive": {
+                "const": true
+              }
+            },
+            "required": [
+              "destructive"
+            ]
+          },
+          "then": {
+            "anyOf": [
+              {
+                "required": [
+                  "terminal"
+                ]
+              },
+              {
+                "required": [
+                  "recipe"
+                ],
+                "properties": {
+                  "recipe": {
+                    "properties": {
+                      "dry_run": {
+                        "const": true
+                      }
+                    },
+                    "required": [
+                      "dry_run"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "argv": {
+              "not": {
+                "contains": {
+                  "type": "string",
+                  "pattern": "^--(?:(?:yes|dry-run)(?:=|(?![\\s\\S]))|(?![\\s\\S]))"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "recipe"
+            ]
+          },
+          "then": {
+            "properties": {
+              "argv": {
+                "contains": {
+                  "const": "--json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "human_flag"
+            ]
+          },
+          "then": {
+            "required": [
+              "terminal"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "human_flag"
+            ]
+          },
+          "then": {
+            "properties": {
+              "argv": {
+                "contains": {
+                  "const": "--allow-tainted"
+                },
+                "not": {
+                  "contains": {
+                    "type": "string",
+                    "pattern": "^--(?:force|override-escalation)(?:=|(?![\\s\\S]))"
+                  }
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "argv": {
+                "not": {
+                  "contains": {
+                    "type": "string",
+                    "pattern": "^--(?:force|override-escalation|allow-tainted)(?:=|(?![\\s\\S]))"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false,
+      "description": "A named operation on an object: a recipe or terminal true. A destructive action needs a recipe with dry_run true or terminal true. A reserved human flag is allowed only as human_flag, with terminal true. Every action opens awkit's dialog; a terminal action has no dry run."
+    },
+    "tui": {
+      "type": "object",
+      "properties": {
+        "argv": {
+          "$ref": "#/$defs/tui_argv"
+        }
+      },
+      "required": [
+        "argv"
+      ],
+      "additionalProperties": false,
+      "description": "How enter opens the tool's own TUI on the selected row. 0.x passes no --result-file to it."
+    },
+    "cron": {
+      "type": "object",
+      "properties": {
+        "install": {
+          "$ref": "#/$defs/argv"
+        },
+        "uninstall": {
+          "$ref": "#/$defs/argv"
+        },
+        "start": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "exact": {
+                  "type": "string",
+                  "maxLength": 1000,
+                  "minLength": 1,
+                  "pattern": "^[^\\r\\n]{1,1000}(?![\\s\\S])"
+                }
+              },
+              "required": [
+                "exact"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "prefix": {
+                  "type": "string",
+                  "maxLength": 1000,
+                  "minLength": 1,
+                  "pattern": "^[^\\r\\n]{1,1000}(?![\\s\\S])"
+                }
+              },
+              "required": [
+                "prefix"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "regex": {
+                  "type": "string",
+                  "maxLength": 1000,
+                  "minLength": 1,
+                  "pattern": "^[^\\r\\n]{1,1000}(?![\\s\\S])"
+                }
+              },
+              "required": [
+                "regex"
+              ],
+              "additionalProperties": false
+            }
+          ],
+          "description": "How the first line of the tool's block is recognized: exact, prefix or Python re.fullmatch on the line without trailing spaces, tabs and CR."
+        },
+        "end": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 1000,
+              "minLength": 1,
+              "pattern": "^[^\\r\\n]{1,1000}(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "interval_flag": {
+          "type": "string",
+          "maxLength": 66,
+          "minLength": 3,
+          "pattern": "^--[a-z][a-z0-9-]{0,63}(?![\\s\\S])"
+        },
+        "env_file_flag": {
+          "type": "string",
+          "maxLength": 66,
+          "minLength": 3,
+          "pattern": "^--[a-z][a-z0-9-]{0,63}(?![\\s\\S])"
+        },
+        "options": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{0,31}(?![\\s\\S])"
+          },
+          "additionalProperties": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "string",
+                "maxLength": 66,
+                "minLength": 3,
+                "pattern": "^--[a-z][a-z0-9-]{0,63}(?![\\s\\S])"
+              }
+            ],
+            "items": {
+              "type": "string",
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^(?:[^{]|[{][{])*(?![\\s\\S])"
+            },
+            "minItems": 1,
+            "maxItems": 8
+          },
+          "maxProperties": 16,
+          "description": "Option name to the literal argv items it adds; the first is a flag."
+        }
+      },
+      "required": [
+        "install",
+        "uninstall",
+        "start",
+        "end"
+      ],
+      "additionalProperties": false,
+      "description": "How awkit runs the tool's own cron install and uninstall, maps its config to the tool's flags and recognizes the tool's block (end null when the block has no end line)."
+    },
+    "audit": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 1024,
+          "minLength": 1,
+          "pattern": "^(?:~/|/)[^\\r\\n]{1,1022}(?![\\s\\S])",
+          "description": "Default ~/.local/state/<tool>/audit.jsonl under the password-database home."
+        },
+        "pair": {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/path"
+              },
+              "minItems": 1,
+              "maxItems": 4
+            },
+            "attempted": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "$ref": "#/$defs/path"
+                },
+                "value": {
+                  "type": "string",
+                  "maxLength": 128,
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "path",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "key",
+            "attempted"
+          ],
+          "additionalProperties": false,
+          "description": "Records sharing the key values form one entry; the attempted ones are those whose path equals the value."
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "doctor": {
+      "type": "object",
+      "properties": {
+        "validate": {
+          "type": "object",
+          "properties": {
+            "argv": {
+              "$ref": "#/$defs/argv"
+            },
+            "ok_exits": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+              },
+              "minItems": 1,
+              "maxItems": 16,
+              "uniqueItems": true
+            },
+            "info_exits": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+              },
+              "maxItems": 16,
+              "uniqueItems": true
+            },
+            "warnings": {
+              "$ref": "#/$defs/path"
+            }
+          },
+          "required": [
+            "argv"
+          ],
+          "additionalProperties": false,
+          "description": "The tool's own offline validate: an exit in ok_exits is ok (warn when the warnings path yields a non-empty list), an exit in info_exits is ok with reason info, any other exit fails."
+        },
+        "probe": {
+          "$ref": "#/$defs/argv"
+        },
+        "env": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Z_][A-Z0-9_]{0,63}(?![\\s\\S])"
+          },
+          "maxItems": 64,
+          "uniqueItems": true,
+          "description": "Variable names required in awkit's environment or the cron env file."
+        },
+        "needs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._+-]{1,128}(?![\\s\\S])"
+          },
+          "maxItems": 16,
+          "uniqueItems": true,
+          "description": "Programs the tool needs (bwrap, socat)."
+        },
+        "pair": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "defs.json#/$defs/name_id"
+              },
+              "tool": {
+                "$ref": "defs.json#/$defs/tool_name"
+              },
+              "min_version": {
+                "$ref": "defs.json#/$defs/version"
+              }
+            },
+            "required": [
+              "id",
+              "tool",
+              "min_version"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 32,
+          "description": "Sibling rules; the check id is pair.<id>."
+        }
+      },
+      "required": [],
+      "additionalProperties": false,
+      "description": "validate, probe, env (variable names), needs (programs such as bwrap and socat) and pair (sibling minimum versions)."
+    },
+    "wire": {
+      "type": "object",
+      "properties": {
+        "hooks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 4,
+                "pattern": "^(?:post|on)-[a-z][a-z0-9_-]{0,63}(?![\\s\\S])"
+              },
+              "state": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 32,
+          "description": "Hooks routed to notice-route send; state true marks a state hook, which only one tool may have wired."
+        },
+        "check": {
+          "type": "object",
+          "properties": {
+            "argv": {
+              "$ref": "#/$defs/argv"
+            },
+            "ok_exits": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+              },
+              "minItems": 1,
+              "maxItems": 16,
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "argv"
+          ],
+          "additionalProperties": false,
+          "description": "A command that loads the tool's config and changes nothing; run before and after the write; an exit outside ok_exits (default [0]) refuses or rolls back."
+        }
+      },
+      "required": [],
+      "additionalProperties": false,
+      "if": {
+        "properties": {
+          "hooks": {
+            "minItems": 1
+          }
+        },
+        "required": [
+          "hooks"
+        ]
+      },
+      "then": {
+        "required": [
+          "check"
+        ]
+      }
+    },
+    "override": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "python": {
+              "type": "string",
+              "maxLength": 384,
+              "minLength": 3,
+              "pattern": "^(?:awkit(?:[.][A-Za-z_][A-Za-z0-9_]{0,63}){1,8}|[A-Za-z_][A-Za-z0-9_-]{0,63}[.]py):[A-Za-z_][A-Za-z0-9_]{0,127}(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "python"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "exec": {
+              "$ref": "defs.json#/$defs/abs_path"
+            }
+          },
+          "required": [
+            "exec"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "python: <awkit.module or file.py>:<function> or exec: absolute path of an executable; both run in a child process and speak awkit-adapter/1."
+    },
+    "overrides": {
+      "type": "object",
+      "properties": {
+        "adapter": {
+          "$ref": "#/$defs/override"
+        },
+        "read": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "defs.json#/$defs/name_id"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/override"
+          }
+        },
+        "attention": {
+          "$ref": "#/$defs/override"
+        },
+        "links": {
+          "$ref": "#/$defs/override"
+        },
+        "action_plan": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "defs.json#/$defs/name_id"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/override"
+          }
+        },
+        "doctor": {
+          "$ref": "#/$defs/override"
+        }
+      },
+      "required": [],
+      "additionalProperties": false,
+      "description": "Any single operation or the whole adapter can be replaced; read is keyed by read name and action_plan by action id."
+    },
+    "row": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "defs.json#/$defs/object_id"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": true,
+      "description": "One row (before sanitizing): id is required; title, since, labels, branch, state and free fields follow Reads."
+    },
+    "read_result": {
+      "type": "object",
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/row"
+          },
+          "maxItems": 100000
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "rows",
+        "truncated"
+      ],
+      "additionalProperties": false
+    },
+    "attention_result": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "$ref": "defs.json#/$defs/code"
+              },
+              "severity": {
+                "$ref": "defs.json#/$defs/severity"
+              },
+              "object": {
+                "$ref": "defs.json#/$defs/object_id"
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 1000,
+                "minLength": 0,
+                "x-untrusted": true
+              },
+              "since": {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 0,
+                "x-untrusted": true
+              }
+            },
+            "required": [
+              "reason",
+              "severity",
+              "object"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 100000
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "links_result": {
+      "type": "object",
+      "properties": {
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "object",
+                "properties": {
+                  "tool": {
+                    "$ref": "defs.json#/$defs/tool_name"
+                  },
+                  "object": {
+                    "$ref": "defs.json#/$defs/object_id"
+                  }
+                },
+                "required": [
+                  "tool",
+                  "object"
+                ],
+                "additionalProperties": false
+              },
+              "to": {
+                "type": "object",
+                "properties": {
+                  "tool": {
+                    "$ref": "defs.json#/$defs/tool_name"
+                  },
+                  "object": {
+                    "$ref": "defs.json#/$defs/object_id"
+                  }
+                },
+                "required": [
+                  "tool",
+                  "object"
+                ],
+                "additionalProperties": false
+              },
+              "tag": {
+                "$ref": "defs.json#/$defs/link_source"
+              }
+            },
+            "required": [
+              "from",
+              "to",
+              "tag"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 100000
+        }
+      },
+      "required": [
+        "links"
+      ],
+      "additionalProperties": false
+    },
+    "action_plan_result": {
+      "type": "object",
+      "properties": {
+        "plan_lines": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 100000,
+            "minLength": 0,
+            "x-untrusted": true
+          },
+          "maxItems": 10000
+        },
+        "pass": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": true,
+          "x-untrusted": true
+        },
+        "refused": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "$ref": "defs.json#/$defs/code"
+                },
+                "reason": {
+                  "type": "string",
+                  "maxLength": 1000,
+                  "minLength": 0,
+                  "x-untrusted": true
+                }
+              },
+              "required": [
+                "code",
+                "reason"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "plan_lines",
+        "pass",
+        "refused"
+      ],
+      "additionalProperties": false
+    },
+    "doctor_result": {
+      "type": "object",
+      "properties": {
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "defs.json#/$defs/check_id"
+              },
+              "status": {
+                "$ref": "defs.json#/$defs/doctor_status"
+              },
+              "reason": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 1000,
+                    "minLength": 0,
+                    "x-untrusted": true
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "details": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": true,
+                "x-untrusted": true
+              }
+            },
+            "required": [
+              "id",
+              "status",
+              "reason",
+              "details"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 2000
+        }
+      },
+      "required": [
+        "checks"
+      ],
+      "additionalProperties": false
+    },
+    "request": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "protocol": {
+              "const": "awkit-adapter/1"
+            },
+            "operation": {
+              "const": "read"
+            },
+            "adapter": {
+              "$ref": "defs.json#/$defs/tool_name"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "read": {
+                  "$ref": "defs.json#/$defs/name_id"
+                }
+              },
+              "required": [
+                "read"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "protocol",
+            "operation",
+            "adapter",
+            "params"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "protocol": {
+              "const": "awkit-adapter/1"
+            },
+            "operation": {
+              "const": "attention"
+            },
+            "adapter": {
+              "$ref": "defs.json#/$defs/tool_name"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "rows_by_read": {
+                  "type": "object",
+                  "properties": {},
+                  "required": [],
+                  "additionalProperties": true,
+                  "x-untrusted": true
+                }
+              },
+              "required": [
+                "rows_by_read"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "protocol",
+            "operation",
+            "adapter",
+            "params"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "protocol": {
+              "const": "awkit-adapter/1"
+            },
+            "operation": {
+              "const": "links"
+            },
+            "adapter": {
+              "$ref": "defs.json#/$defs/tool_name"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "rows_by_read": {
+                  "type": "object",
+                  "properties": {},
+                  "required": [],
+                  "additionalProperties": true,
+                  "x-untrusted": true
+                }
+              },
+              "required": [
+                "rows_by_read"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "protocol",
+            "operation",
+            "adapter",
+            "params"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "protocol": {
+              "const": "awkit-adapter/1"
+            },
+            "operation": {
+              "const": "action_plan"
+            },
+            "adapter": {
+              "$ref": "defs.json#/$defs/tool_name"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "$ref": "defs.json#/$defs/name_id"
+                },
+                "object": {
+                  "$ref": "defs.json#/$defs/object_id"
+                }
+              },
+              "required": [
+                "action",
+                "object"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "protocol",
+            "operation",
+            "adapter",
+            "params"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "protocol": {
+              "const": "awkit-adapter/1"
+            },
+            "operation": {
+              "const": "doctor"
+            },
+            "adapter": {
+              "$ref": "defs.json#/$defs/tool_name"
+            },
+            "params": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "protocol",
+            "operation",
+            "adapter",
+            "params"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "The request an override reads on standard input; params depend on the operation."
+    },
+    "reply": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "result": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/read_result"
+                },
+                {
+                  "$ref": "#/$defs/attention_result"
+                },
+                {
+                  "$ref": "#/$defs/links_result"
+                },
+                {
+                  "$ref": "#/$defs/action_plan_result"
+                },
+                {
+                  "$ref": "#/$defs/doctor_result"
+                }
+              ]
+            }
+          },
+          "required": [
+            "ok",
+            "result"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": false
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "$ref": "defs.json#/$defs/code"
+                },
+                "message": {
+                  "type": "string",
+                  "maxLength": 1000,
+                  "minLength": 0,
+                  "x-untrusted": true
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "The reply an override writes on standard output; result depends on the operation."
+    }
+  }
+}

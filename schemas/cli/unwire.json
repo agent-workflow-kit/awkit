@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "awkit/cli/unwire.json",
+  "title": "unwire --json",
+  "description": "Outcome of wiring one tool. files lists the one drop-in considered (the tool's hook drop-in) with the exact text, which is awkit's own generated text. nothing_to_wire exits 0 with no files.",
+  "type": "object",
+  "properties": {
+    "tool": {
+      "$ref": "../defs.json#/$defs/tool_name"
+    },
+    "dry_run": {
+      "type": "boolean"
+    },
+    "outcome": {
+      "enum": [
+        "removed",
+        "unchanged",
+        "nothing_to_wire"
+      ]
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "$ref": "../defs.json#/$defs/abs_path"
+          },
+          "role": {
+            "enum": [
+              "hooks"
+            ]
+          },
+          "outcome": {
+            "enum": [
+              "removed",
+              "unchanged",
+              "nothing_to_wire"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 1000000,
+            "minLength": 0,
+            "description": "The exact drop-in text: the marker line with the hash of the rest, then the hooks map (awkit's own text)."
+          }
+        },
+        "required": [
+          "path",
+          "role",
+          "outcome"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 1
+    }
+  },
+  "required": [
+    "tool",
+    "dry_run",
+    "outcome",
+    "files"
+  ],
+  "additionalProperties": false
+}

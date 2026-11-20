@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "awkit/cli/audit.json",
+  "title": "audit --json",
+  "description": "The merged timeline, oldest first, by (ts as UTC instant, tool, file offset of the first record). Each tool's adapter may declare a pairing descriptor (key paths and the attempted value): records sharing a key form one entry of any size (paired, in_flight, unknown or unpaired); without a descriptor, or with --no-pair, every record is a single. skipped counts malformed or oversize lines per tool, lists the tools whose file was unusable and the tools whose file was cut to the last 64 MiB. Sources are the registered tools and awkit's own file (source awkit).",
+  "type": "object",
+  "properties": {
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "tool": {
+            "$ref": "../defs.json#/$defs/tool_name"
+          },
+          "key": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 128,
+              "minLength": 0
+            },
+            "maxItems": 8,
+            "x-untrusted": true,
+            "description": "The pairing key values; empty for a single."
+          },
+          "pairing": {
+            "enum": [
+              "paired",
+              "in_flight",
+              "unknown",
+              "unpaired",
+              "single"
+            ]
+          },
+          "ts": {
+            "$ref": "../defs.json#/$defs/ts"
+          },
+          "records": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": true
+            },
+            "minItems": 1,
+            "maxItems": 10000,
+            "x-untrusted": true,
+            "description": "The sanitized tool records as read; each has a ts that norm_ts accepts; records keep their own ts text."
+          }
+        },
+        "required": [
+          "tool",
+          "key",
+          "pairing",
+          "ts",
+          "records"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 1000000
+    },
+    "skipped": {
+      "type": "object",
+      "properties": {
+        "lines": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "../defs.json#/$defs/tool_name"
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "../defs.json#/$defs/tool_name"
+          },
+          "maxItems": 256,
+          "uniqueItems": true
+        },
+        "truncated": {
+          "type": "array",
+          "items": {
+            "$ref": "../defs.json#/$defs/tool_name"
+          },
+          "maxItems": 257,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "lines",
+        "files",
+        "truncated"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "entries",
+    "skipped"
+  ],
+  "additionalProperties": false
+}

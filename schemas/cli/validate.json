@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "awkit/cli/validate.json",
+  "title": "validate --json",
+  "description": "Loads the config, drop-ins and every adapter against the schemas without running any tool or override. Always printed; exit 0 when valid is true, exit 2 when anything is invalid or unsafe.",
+  "type": "object",
+  "properties": {
+    "valid": {
+      "type": "boolean"
+    },
+    "checked": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "$ref": "../defs.json#/$defs/abs_path"
+          },
+          "kind": {
+            "enum": [
+              "config",
+              "drop_in",
+              "adapter"
+            ]
+          },
+          "tool": {
+            "oneOf": [
+              {
+                "$ref": "../defs.json#/$defs/tool_name"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "location": {
+                  "type": "string",
+                  "maxLength": 1000,
+                  "minLength": 0,
+                  "x-untrusted": true
+                },
+                "message": {
+                  "type": "string",
+                  "maxLength": 1000,
+                  "minLength": 0,
+                  "x-untrusted": true
+                }
+              },
+              "required": [
+                "location",
+                "message"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 1000
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "location": {
+                  "type": "string",
+                  "maxLength": 1000,
+                  "minLength": 0,
+                  "x-untrusted": true
+                },
+                "message": {
+                  "type": "string",
+                  "maxLength": 1000,
+                  "minLength": 0,
+                  "x-untrusted": true
+                }
+              },
+              "required": [
+                "location",
+                "message"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 1000
+          }
+        },
+        "required": [
+          "path",
+          "kind",
+          "tool",
+          "ok",
+          "errors",
+          "warnings"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 1000
+    }
+  },
+  "required": [
+    "valid",
+    "checked"
+  ],
+  "additionalProperties": false
+}

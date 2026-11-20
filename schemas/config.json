@@ -1,14 +1,235 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "awkit/config",
-  "title": "awkit configuration",
-  "description": "Placeholder; keys are defined in docs/interface.md once designed.",
+  "$id": "awkit/config.json",
+  "title": "awkit config",
+  "description": "Merged config (config.yaml plus config.d drop-ins, lists replaced). Unknown keys are refused; there are no repos or hooks keys in 0.x. Every key whose default is none accepts null. Environment variables set only dashboard.refresh, dashboard.concurrency and dashboard.read_timeout, win over the file and are validated by this schema. Self-contained: no external $ref.",
   "type": "object",
   "properties": {
-    "hooks": {
+    "me": {
       "type": "object",
-      "description": "Hook name to list of hook entries (design guide section 8)."
+      "properties": {
+        "name": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 256,
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "github": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.][A-Za-z0-9_.@:-]{0,254}(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "gitlab": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.][A-Za-z0-9_.@:-]{0,254}(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "jira": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.][A-Za-z0-9_.@:-]{0,254}(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "roles": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "maxLength": 32,
+        "minLength": 1,
+        "pattern": "^[a-z][a-z0-9_-]{0,31}(?![\\s\\S])"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/tool_name"
+      },
+      "maxProperties": 32,
+      "description": "Role to tool, for example githost: forgectl, tickets: ticketctl, notify: notice-route. 0.x: validated only; a value must name a loaded adapter (validate warns otherwise)."
+    },
+    "tools": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/tool_name"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "bin": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/safe_path"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "maxProperties": 256
+    },
+    "dashboard": {
+      "type": "object",
+      "properties": {
+        "refresh": {
+          "type": "string",
+          "maxLength": 24,
+          "minLength": 2,
+          "pattern": "^(?:(?:[5-9]|[1-9][0-9]+)s|[1-9][0-9]*(?:m|h|d)|(?:[5-9][0-9]{3}|[1-9][0-9]{4,})ms)(?![\\s\\S])",
+          "default": "15s"
+        },
+        "concurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16,
+          "default": 8
+        },
+        "read_timeout": {
+          "$ref": "#/$defs/duration",
+          "default": "10s"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "cron": {
+      "type": "object",
+      "properties": {
+        "env_file": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/safe_path"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path_extra": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/safe_path"
+          },
+          "maxItems": 32,
+          "default": []
+        },
+        "intervals": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/tool_name"
+          },
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string",
+                "maxLength": 230,
+                "minLength": 1,
+                "pattern": "^(?!-)[A-Za-z0-9*/,-]{1,32}(?: [A-Za-z0-9*/,-]{1,32}){0,6}(?![\\s\\S])"
+              },
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 99999
+              }
+            ],
+            "description": "Passed verbatim to the tool's interval flag; the tool validates it."
+          },
+          "maxProperties": 256
+        },
+        "options": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/tool_name"
+          },
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 32,
+              "minLength": 1,
+              "pattern": "^[a-z][a-z0-9_-]{0,31}(?![\\s\\S])"
+            },
+            "maxItems": 16,
+            "uniqueItems": true
+          },
+          "maxProperties": 256
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "doctor": {
+      "type": "object",
+      "properties": {
+        "probe_timeout": {
+          "$ref": "#/$defs/duration",
+          "default": "60s"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
     }
   },
-  "additionalProperties": true
+  "required": [],
+  "additionalProperties": false,
+  "$defs": {
+    "duration": {
+      "type": "string",
+      "maxLength": 24,
+      "minLength": 2,
+      "pattern": "^[1-9][0-9]*(?:ms|s|m|h|d)(?![\\s\\S])",
+      "description": "A positive integer with the unit ms, s, m, h or d; no bare numbers, no fractions. Full match."
+    },
+    "safe_path": {
+      "type": "string",
+      "maxLength": 4096,
+      "minLength": 1,
+      "pattern": "^(?![\\s\\S]*//)(?![\\s\\S]*(?:^|/)[.][.](?:/|(?![\\s\\S])))/[A-Za-z0-9._+@/-]{0,4095}(?![\\s\\S])",
+      "description": "An absolute path that awkit may write into a drop-in or pass to a tool's installer: only A-Z a-z 0-9 . _ + @ / -, no // and no .. segment. Full match."
+    },
+    "tool_name": {
+      "type": "string",
+      "maxLength": 32,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9-]{0,31}(?![\\s\\S])",
+      "description": "A tool name. Full match."
+    }
+  }
 }

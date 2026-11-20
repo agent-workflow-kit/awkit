@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "awkit/cli/adapters-show.json",
+  "title": "adapters show --json",
+  "description": "One adapter after loading, with the effective values (enabled and bin from the config applied). A failed adapter exits 0 with status adapter_invalid and adapter null.",
+  "type": "object",
+  "properties": {
+    "tool": {
+      "$ref": "../defs.json#/$defs/tool_name"
+    },
+    "source": {
+      "enum": [
+        "bundled",
+        "overlay"
+      ]
+    },
+    "path": {
+      "$ref": "../defs.json#/$defs/abs_path"
+    },
+    "status": {
+      "enum": [
+        "registered",
+        "absent",
+        "disabled",
+        "adapter_invalid"
+      ]
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "bin": {
+      "oneOf": [
+        {
+          "$ref": "../defs.json#/$defs/abs_path"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "adapter": {
+      "oneOf": [
+        {
+          "$ref": "../adapter.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "tool",
+    "source",
+    "path",
+    "status",
+    "enabled",
+    "bin",
+    "adapter"
+  ],
+  "additionalProperties": false
+}

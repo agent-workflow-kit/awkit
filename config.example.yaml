@@ -1,2 +1,58 @@
-# Example config for awkit. Location: ~/.config/awkit/config.yaml (drop-ins: config.d/*.yaml). Keys are defined in docs/interface.md once designed.
-hooks: {}
+# Example config for awkit. Location: ~/.config/awkit/config.yaml
+# Drop-ins: ~/.config/awkit/config.d/*.yaml (lexical order, maps merged, lists replaced).
+# The config, drop-ins, the adapter overlay (~/.config/awkit/adapters/) and their parent
+# directories must be owned by you, not symlinks, and not group- or world-writable.
+# Unknown keys are refused. There are no repos: or hooks: keys in 0.x.
+# Every key whose default is none accepts null.
+# `awkit validate` checks this file against schemas/config.json without running any tool.
+
+me:
+  # The <user> of human:<user>. Default: the OS user name (null = use the default).
+  name: null
+  # Account names. 0.x: validated only, passed nowhere (reserved for 1.x rules). Default: none.
+  github: null
+  gitlab: null
+  jira: null
+
+# Role to tool. 0.x: validated only (a value must name a loaded adapter). Default: none.
+# Example entries:
+#   githost: forgectl
+#   tickets: ticketctl
+#   notify: notice-route
+roles: {}
+
+# Per-tool switches, keyed by tool name. Default: none (every tool whose program resolves is registered).
+# Example entry:
+#   forgectl:
+#     enabled: true   # default true; an explicit true makes "not installed" a doctor failure,
+#                     # false skips the tool everywhere
+#     bin: null       # default none; an absolute path (only A-Z a-z 0-9 . _ + @ / -) that
+#                     # overrides the adapter's program name. awkit never searches the PATH.
+tools: {}
+
+dashboard:
+  # The refresh interval; at least 5s. Env: AWKIT_DASHBOARD__REFRESH (wins over this file).
+  refresh: 15s
+  # The most concurrent reads, 1 to 16. Env: AWKIT_DASHBOARD__CONCURRENCY.
+  concurrency: 8
+  # The default read timeout. Env: AWKIT_DASHBOARD__READ_TIMEOUT.
+  read_timeout: 10s
+
+cron:
+  # A user-owned file (mode 0600) passed to the tools whose own `cron install` takes --env-file
+  # (agent-spawn, wtctl). Other tools read their own env file from their own config. Default: none.
+  env_file: null
+  # Absolute directories searched for tool programs after ~/.local/bin. Default: [].
+  path_extra: []
+  # The value passed to the tool's own interval flag, verbatim (the tool validates it).
+  # Default: the tool's own. Example entries:
+  #   agent-spawn: 10
+  #   review-watch: "*/10 * * * *"
+  intervals: {}
+  # Option names the tool's adapter maps to flags of its own installer. Default: none. Example entry:
+  #   ticket-work: [with-start]
+  options: {}
+
+doctor:
+  # The timeout of one probe (doctor --probe).
+  probe_timeout: 60s

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "awkit/cli/attention.json",
+  "title": "attention --json",
+  "description": "The Attention list ordered by severity (error, action, info), then since ascending with null last, then id. stale names the tools whose last read failed; partial names the tools whose rows were cut short or dropped.",
+  "type": "object",
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "../defs.json#/$defs/attention_item"
+      },
+      "maxItems": 100000
+    },
+    "stale": {
+      "type": "array",
+      "items": {
+        "$ref": "../defs.json#/$defs/tool_name"
+      },
+      "maxItems": 256,
+      "uniqueItems": true
+    },
+    "partial": {
+      "type": "array",
+      "items": {
+        "$ref": "../defs.json#/$defs/tool_name"
+      },
+      "maxItems": 256,
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "items",
+    "stale",
+    "partial"
+  ],
+  "additionalProperties": false
+}
