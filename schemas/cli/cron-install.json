@@ -30,6 +30,13 @@
               "skipped"
             ]
           },
+          "reason": {
+            "enum": [
+              "no_cron_key",
+              "stopped"
+            ],
+            "description": "Why a tool was skipped: its adapter has no cron key, or the run was stopped by a signal before it."
+          },
           "exit": {
             "type": [
               "integer",

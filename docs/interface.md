@@ -59,10 +59,10 @@ A `TOOL` or `--tool` value is a tool name (grammar `^[a-z][a-z0-9-]{0,31}$`). A 
 Durations are `^[1-9][0-9]*(ms|s|m|h|d)$` everywhere: no bare numbers and no fractions (a recorded deviation from the guide). Timestamps awkit writes are UTC `YYYY-MM-DDTHH:MM:SS.sssZ`; input timestamps (row `since`, audit `ts`, `--since`, `--until`) are normalized by `norm_ts` (below); a value it rejects is null (a row field), malformed (an audit line) or `invalid_argument` (a flag). Records in `audit` output keep their own `ts` text.
 
 ```text
-TS_IN = ^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$
+TS_IN = ^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(\.[0-9]{1,9})?(Z|[+-][0-9]{2}:[0-9]{2})(?![\s\S])   # ASCII digits only
 def norm_ts(v) -> str | None:
     if not isinstance(v, str) or len(v) > 40 or not re.fullmatch(TS_IN, v): return None
-    try: dt = datetime(Y, M, D, h, m, s, micro=first 6 fraction digits, tzinfo=offset); u = dt.astimezone(UTC)
+    try: dt = datetime(Y, M, D, h, m, s, micro=int(fraction[:6].ljust(6, "0")), tzinfo=offset); u = dt.astimezone(UTC)
     except (ValueError, OverflowError): return None
     if not 1970 <= u.year <= 9999: return None
     return u.strftime("%Y-%m-%dT%H:%M:%S.") + f"{u.microsecond // 1000:03d}Z"
@@ -371,7 +371,7 @@ One worker refreshes all tools: reads run concurrently under a semaphore of `das
 
 ### Terminal handoff
 
-A child that needs the terminal (a tool's TUI, `ticket-create create`, an interactive agent session) runs with the dashboard suspended in the same terminal. The dashboard never leaves SIGINT ignored for a child to inherit: for the child's lifetime it installs a no-op handler (exec resets it to the default in the child), and once the child's group is the foreground group the terminal sends Ctrl-C to the child only. It discards pending typeahead on the terminal before the child starts and again after it exits, restores the terminal state it saved, and then redraws. The child starts in its own process group and is made the foreground group as in the pseudocode below (SIGTTOU is ignored only around each `tcsetpgrp` call); SIGTERM and SIGHUP are forwarded with `killpg` of that recorded group only while the child has not been reaped, and the dashboard takes the foreground back after the child exits. A child whose output awkit captures runs in a new session with standard input from `/dev/null`, so it can never read the dashboard's terminal. The dashboard installs a handler for SIGTERM and SIGHUP that restores the terminal before exiting.
+A child that needs the terminal (a tool's TUI, `ticket-create create`, an interactive agent session) runs with the dashboard suspended in the same terminal. The dashboard never leaves SIGINT ignored for a child to inherit: for the child's lifetime it installs a no-op handler (exec resets it to the default in the child), and once the child's group is the foreground group the terminal sends Ctrl-C to the child only. It discards pending typeahead on the terminal before the child starts and again after it exits, restores the terminal state it saved, and then redraws. The child starts in its own process group and is made the foreground group as in the pseudocode below. SIGTTOU is blocked (`pthread_sigmask`, in the calling thread only) around each `tcsetpgrp` call, never ignored process-wide, so no child spawned by another thread inherits it. SIGTERM and SIGHUP are forwarded with `killpg` of the recorded group only while the child has not been reaped, and the group gets SIGKILL 2 s later if it is still there; the dashboard then takes the foreground back, restores the terminal and exits. The wait runs in a worker thread and is a `waitpid` loop with `WUNTRACED`, so a child that stops (Ctrl-Z, SIGTTIN, a `kill -STOP`) does not hang awkit: the dashboard takes the foreground back, restores the terminal and shows "<tool> is stopped: c to continue, k to kill" in the status line. `c` makes the child's group foreground again and sends SIGCONT; `k` sends SIGTERM, then SIGKILL after 2 s. The lock `child_lock` guards only the check of the reaped flag together with the `killpg`, and the step that records the reaped child; it is never held across `waitpid`, so the signal handler (which runs in the main thread) can always take it. A child whose output awkit captures runs in a new session with standard input from `/dev/null`, so it can never read the dashboard's terminal. The dashboard installs a handler for SIGTERM and SIGHUP that restores the terminal before exiting.
 
 ```text
 handoff(argv):
@@ -379,13 +379,18 @@ handoff(argv):
     old_int = signal(SIGINT, noop_handler)           # a handler, never SIG_IGN: exec resets it to default
     tcflush(tty, TCIFLUSH)
     child = Popen(argv, process_group=0, pass_fds=(), stdin/stdout/stderr = the terminal)
-    with_sigttou_ignored(lambda: tcsetpgrp(tty, child.pid))   # ignore only around the call
+    foreground(child.pid)
     killpg(child.pid, SIGCONT)                       # in case it stopped on SIGTTIN before it was foreground
-    on SIGTERM or SIGHUP to the dashboard: under child_lock, if child.returncode is None: killpg(child.pid, sig)
-    wait under child_lock
-    with_sigttou_ignored(lambda: tcsetpgrp(tty, getpgrp()))
+    on SIGTERM or SIGHUP to the dashboard:
+        with child_lock: if not reaped: killpg(child.pid, sig); timer(2 s): with child_lock: if not reaped: killpg(child.pid, SIGKILL)
+    loop:                                            # in a worker thread; child_lock is not held here
+        pid, status = waitpid(child.pid, WUNTRACED)
+        if WIFSTOPPED(status): foreground(getpgrp()); tcflush; restore termios; app.resume(); offer c or k; continue
+        with child_lock: reaped = True
+        break
+    foreground(getpgrp())
     tcflush(tty, TCIFLUSH); restore termios; signal(SIGINT, old_int); app.resume()
-with_sigttou_ignored(f): old = signal(SIGTTOU, SIG_IGN); try f() finally signal(SIGTTOU, old)
+foreground(pgid): m = pthread_sigmask(SIG_BLOCK, {SIGTTOU}); try tcsetpgrp(tty, pgid) finally pthread_sigmask(SIG_SETMASK, m)
 ```
 
 ### Child TUI
@@ -402,7 +407,7 @@ With `--result-file PATH`, `awkit dashboard` and `awkit browse` write on exit 0,
 
 An action is an entry of an adapter's `actions` with `id`, `label`, `applies_to` (a list of reasons of the same adapter), an optional `when` (one equality on a row field; the action is hidden when false), `argv` (a template), `destructive` (true when it ends work or leaves the machine) and exactly one form:
 
-- **`recipe`**: `{dry_run: bool, show: [path...], pass: [{name, from, type, flag?}], yes: bool, actor_charset?}`. The argv must contain `--json`. With `dry_run: true` the dry run is the argv plus the `row.` pass values, `--actor` and `--dry-run` (never `--yes`); the loader refuses a separate dry-run argv. `from` is `row.<field>` (used in both runs: with `flag` appended, without it filling the whole-element placeholder `{pass.<name>}`) or `dry_run.<path>` (needs `flag`; real command only), and `type` is `hash`, `object_id`, `int` or `enum` (an `enum` lists its `values`); each passed value is checked against its grammar. A `{pass.<name>}` with no flagless `row.` entry of that name, a flagless entry not used exactly once, and a `dry_run.` entry without `flag` are load errors. The `yes` key is written quoted (`"yes": true`) because YAML 1.1 loaders read a bare `yes` as a boolean. `dry_run: false` is allowed only when `destructive` is false. An `action_plan` override replaces the derived dry run and applies only to actions with `dry_run: true`. `show` paths are read from the dry-run result (from the row when `dry_run` is false).
+- **`recipe`**: `{dry_run: bool, show: [path...], pass: [{name, from, type, flag?}], yes: bool, actor_charset?}`. The argv must contain `--json`, and an action argv never contains a bare `--`, `--yes` or `--dry-run` (awkit adds them where the recipe says), nor does a `pass` flag name `--yes`, `--dry-run`, `--actor`, `--force`, `--override-escalation` or `--allow-tainted` (all in the schema; a load error). `actor_charset` is the body of a character class (such as `A-Za-z0-9._-`) made only of characters of `[A-Za-z0-9._@-]`; the fitted actor is checked against the actor grammar again after fitting. With `dry_run: true` the dry run is the argv plus the `row.` pass values, `--actor` and `--dry-run` (never `--yes`); the loader refuses a separate dry-run argv. `from` is `row.<field>` (used in both runs: with `flag` appended, without it filling the whole-element placeholder `{pass.<name>}`) or `dry_run.<path>` (needs `flag`; real command only), and `type` is `hash`, `object_id`, `int` or `enum` (an `enum` lists its `values`); each passed value is checked against its grammar as it will appear in argv (`int` accepts only a JSON integer that is not a boolean, `hash` and `object_id` only a string; an `enum` value matches `^[A-Za-z0-9_][A-Za-z0-9._:@/#=+~*-]{0,127}(?![\s\S])`). A `{pass.<name>}` with no flagless `row.` entry of that name, a flagless entry not used exactly once, and a `dry_run.` entry without `flag` are load errors. The `yes` key is written quoted (`"yes": true`) because YAML 1.1 loaders read a bare `yes` as a boolean. `dry_run: false` is allowed only when `destructive` is false. An `action_plan` override replaces the derived dry run and applies only to actions with `dry_run: true`. `show` paths are read from the dry-run result (from the row when `dry_run` is false).
 - **`terminal: true`**: no dry run; awkit's dialog shows the argv (empty body) and `y` hands over the terminal (see Terminal handoff); the only form for a command without `--yes`, including `ticket-create create`. `human_flag` requires `terminal: true`.
 
 Every action, terminal ones too, opens awkit's dialog first, and gets `--actor <actor>` appended unless its argv has `{actor}`. A destructive action must be a recipe with `dry_run: true` or a terminal action. A non-zero dry run is a refusal with no `y`: the dialog shows the exit code, the envelope's `code` and `reason` when stdout is an object with `error`, else the `show` fields over stdout when it is a JSON object (a tool's refusal plan stays visible).
@@ -428,7 +433,7 @@ on key "a" with row R (snapshot by value):
         r = run(base + pre + ["--dry-run"], read rules)            # no --yes; same actor
         doc = r.stdout parsed as a JSON object, else None           # parse_constant refuses NaN and Infinity
         if r.exit != 0:
-            refusal(exit=r.exit, code_reason=doc["error"] if doc has "error" else None,
+            refusal(exit=r.exit, code_reason=doc["error"] if doc has "error" and doc["error"] is an object else None,
                     body=show(x.recipe.show, doc) if doc and "error" not in doc else []); return
         if doc is None: refusal("the dry run printed no JSON object"); return
         dryp = {p.name: check(p.type, path(p.from[8:], doc)) for p in x.pass if p.from.startswith("dry_run.")}
@@ -438,19 +443,21 @@ on key "a" with row R (snapshot by value):
     else: real = base + pre + (["--yes"] if x.recipe.yes else []); body = show(x.recipe.show, R)
     dialog(chrome = tool, label, R.id, actor, real one element per line, "destructive" when set,
                     human_flag when set, "Run? [y/N]";  body = lines prefixed "| ")
-    if size(body) > 64 KiB: show "too large to confirm here; use <tool> directly", no y
+    if size(body) > 64 KiB: show "too large to confirm here; use <tool> directly", no y     # sum of the cut values
     gate: shown_at = monotonic(); tcflush(TCIFLUSH)
-          a key event whose own timestamp < shown_at + 0.5 s is dropped
-          y accepted only when the body fits the pane or has been scrolled to its end once
+          a key event whose own timestamp < shown_at + 0.5 s is dropped     # the event time and shown_at are both time.monotonic()
+          chrome and body are one scrollable area; y accepted only when, at key time, the live geometry
+          shows all of it, or it has been scrolled to its end once since the last resize
           (keys or mouse wheel; lines wrap, never scroll sideways); Enter, paste, any other key = no
     on y: terminal -> run real under Terminal handoff; else run real captured with the read rules
-          status: exit 0 "done"; else exit, envelope code and reason when stdout has "error",
+          status: exit 0 "done"; else exit, envelope code and reason when stdout has an "error" object (a code that does not match the code grammar is shown as "unrecognized"),
                   and for exit 12 "the outcome may be partial; check <tool>"
 show(paths, doc): each path's value: a string as is; null, booleans and numbers as JSON text;
-                  lists and objects as compact JSON text; then sanitized without the per-field cut
+                  lists and objects as compact JSON text; each value is cut to 64 KiB + 1 code points first (collecting stops
+                  once the sum passes the cap), then split on LF, each line sanitized without the per-field cut and prefixed "| " 
 ```
 
-An argv that contains `{actor}` gets the actor there and no appended `--actor`.
+An argv that contains `{actor}` gets the actor there and no appended `--actor`. A body line is the only place an LF survives (as a line break); a lone CR and every other control stay markers. An `error` that is not an object is shown as `refused` with the exit code only.
 
 ## Cron
 
@@ -467,7 +474,7 @@ Each adapter has one recognizer per tool: `start` (`{exact: text}`, `{prefix: te
 ### Install order
 
 ```text
-INTERVAL = ^(?!-)[A-Za-z0-9*/,-]{1,32}(?: [A-Za-z0-9*/,-]{1,32}){0,6}$     # or an integer 1..99999
+INTERVAL = ^(?!-)[A-Za-z0-9*/,-]{1,32}(?: [A-Za-z0-9*/,-]{1,32}){0,6}(?![\s\S])     # or an integer 1..99999
 def install_argv(tool):
     a = resolve_argv(adapter.cron.install)          # element 0 replaced by the resolved program path
     v = config.cron.intervals.get(tool)             # None, str or int
@@ -480,31 +487,33 @@ def install_argv(tool):
 def uninstall_argv(tool): return resolve_argv(adapter.cron.uninstall)
 
 def installer_env():
-    pw = getpwuid(getuid())
+    pw = getpwuid(getuid())                         # pw_dir must pass safe_path, else exit 20 unsafe_value
+    dirs = [d for d in [pw.pw_dir + "/.local/bin", *config.cron.path_extra, "/usr/local/bin", "/usr/bin", "/bin"]
+            if not exists(d) or ownership_ok(d)]      # an existing directory that fails the rule is left out
     return {"HOME": pw.pw_dir, "USER": pw.pw_name, "LOGNAME": pw.pw_name, "LANG": "C.UTF-8",
-            "PATH": ":".join([pw.pw_dir + "/.local/bin", *config.cron.path_extra,
-                              "/usr/local/bin", "/usr/bin", "/bin"])}
+            "PATH": ":".join(dirs)}
 # no XDG_*, PYTHON*, LD_*, BASH_ENV, ENV, SHELLOPTS or any other variable; values pass safe_path or are fixed
 
 cron OP [--tool T]... [--dry-run]:                         # OP is install or uninstall
     named T absent or disabled -> exit 12 tool_unavailable; named T without adapter -> exit 10
     tools = [t for t in registered tools, lexical, if (not --tool or t in --tool)]
-    rows  = [(t, "skipped", None) if not adapter(t).cron else (t, None, argv_for(t, OP)) for t in tools]
+    rows  = [(t, "skipped", None) if not adapter(t).cron      # reason no_cron_key else (t, None, argv_for(t, OP)) for t in tools]
     if --dry-run:
         print {dry_run: true, unchanged: null, tools: [{tool, outcome: skipped|planned, argv}]}; exit 0
         # no lock, no crontab read, no audit record, nothing run
+    stop = False; install handlers for SIGINT, SIGTERM, SIGHUP before the lock and the first audit append:
+        first signal: stop = True and print "stopping after <tool>"; second: SIGTERM to the running installer's group, SIGKILL after 2 s, tool failed
     if not flock(cron.lock, LOCK_EX | LOCK_NB): exit 12 unavailable locked        # no waiting
     before = read_crontab()          # failure -> exit 12 crontab_failed|crontab_unusable; nothing run, no audit
     audit attempted {inputs.tools: planned tools, before_sha256: sha256(before)}
-    stop = False; install handlers for SIGINT, SIGTERM, SIGHUP that set stop = True
     for (t, outcome, argv) in rows:
         if outcome == "skipped": continue
-        if stop: outcome[t] = skipped; continue
+        if stop: outcome[t] = skipped, reason stopped; continue
         r = run(argv, env=installer_env(), stdin=DEVNULL, new session, stdout cap 8 MiB, stderr cap 64 KiB, timeout 60s)
         # timeout: SIGTERM to the installer's process group, SIGKILL after 2 s, reap
         if r.timed_out: outcome[t] = failed, exit null, message "timeout; the block may be partly written, run awkit doctor"
         elif r.exit == 0: outcome[t] = done
-        else: outcome[t] = failed, exit r.exit, message sanitize(stderr text, 1000)
+        else: outcome[t] = failed, exit r.exit (a signal death N is 128+N), message sanitize(stderr text, 1000)
     after = read_crontab() or None on failure
     unchanged = (after is not None and after == before)
     audit outcome {result.outcome: done if every planned tool is done else failed, tools, unchanged, after_sha256}
@@ -522,7 +531,7 @@ def read_crontab():
 
 `crontab` that does not resolve (Program resolution) is `crontab_failed`. awkit passes no `--yes`, `--actor` or `--json` to installers (the tools write their own cron actors); flag order is the install argv, interval, env file, options.
 
-With `--dry-run` awkit prints each tool's outcome (`planned`, with the exact argv it would run, or `skipped`), runs nothing, takes no lock, reads no crontab and writes no audit record. The crontab is read before and after for the audit hashes and by `doctor`; awkit keeps no copy of it. The lock serializes awkit's `cron` runs only and never waits; each tool's own installer keeps its own write window against a hand edit (see Residual risks). Every non-dry-run `cron` command that reads the crontab writes one pair of audit records (see Audit); its outcome carries `unchanged` when the crontab did not change. `uninstall` runs the same steps with each tool's `uninstall` argv. A signal stops the run between tools; the remaining tools are `skipped` and the exit is 12 `cron_partial`. A lock held exits 12 `unavailable` with `reason: locked` at once.
+With `--dry-run` awkit prints each tool's outcome (`planned`, with the exact argv it would run, or `skipped`), runs nothing, takes no lock, reads no crontab and writes no audit record. The crontab is read before and after for the audit hashes and by `doctor`; awkit keeps no copy of it. The lock serializes awkit's `cron` runs only and never waits; each tool's own installer keeps its own write window against a hand edit (see Residual risks). Every non-dry-run `cron` command that reads the crontab writes one pair of audit records (see Audit); its outcome carries `unchanged` when the crontab did not change. `uninstall` runs the same steps with each tool's `uninstall` argv. A signal stops the run between tools; the remaining tools are `skipped` with `reason: stopped` (a tool without a `cron` key is `skipped` with `reason: no_cron_key`) and the exit is 12 `cron_partial`. The handlers are installed before the first audit append, so an outcome record is always written. A lock held exits 12 `unavailable` with `reason: locked` at once.
 
 ## Wire
 
@@ -541,18 +550,20 @@ hooks:
 
 Lines end in LF, the file ends with an LF and the hooks keep the adapter's order. The path matches `safe_path` and `<TOOL>` the tool grammar, so the double-quoted YAML scalar needs no escape and `sh -c` reads it literally.
 
-`wire` shows the exact drop-in text and applies it after confirmation: a human present answers `y` on `/dev/tty` (prompts and reads go there), or `--yes` skips the question (exit 13 when neither a human is present nor `--yes` is given; `unwire` follows the same rule). Outcomes are `wired`, `replaced`, `unchanged`, `removed` (for `unwire`) and `nothing_to_wire`. A drop-in that exists and is not `owned` (no marker, or a body edited after awkit wrote it) is `drop_in_foreign` (exit 20): awkit never overwrites or removes a file it did not write as it is. Add your own hooks in another drop-in. `wire` with `XDG_CONFIG_HOME` set to a non-default value refuses with exit 20 `xdg_mismatch`, because the tool would not read the drop-in. Values written into `cmd` must match the safe-value grammar (see Configuration; else exit 20 `unsafe_value`). The adapter's `wire.check` is `{argv, ok_exits: [0]}`, required whenever `wire.hooks` is non-empty: a command that loads the tool's config and changes nothing (its `validate`, or a list read). It runs before the write (a failing check refuses, so a pre-existing error is never blamed on the drop-in) and after it (rollback when the exit is not in `ok_exits`), with the read rules.
+`wire` shows the exact drop-in text and applies it after confirmation: a human present answers `y` on `/dev/tty` (prompts and reads go there), or `--yes` skips the question; a dry run and an `unchanged` result create no directory (exit 13 when neither a human is present nor `--yes` is given; `unwire` follows the same rule). Outcomes are `wired`, `replaced`, `unchanged`, `removed` (for `unwire`) and `nothing_to_wire`. A drop-in that exists and is not `owned` (no marker, or a body edited after awkit wrote it) is `drop_in_foreign` (exit 20): awkit never overwrites or removes a file it did not write as it is. Add your own hooks in another drop-in. `wire` with `XDG_CONFIG_HOME` set to a non-default value, or `HOME` set to anything but the password-database home, refuses with exit 20 `xdg_mismatch`, because the tool would not read the drop-in (or would read another config tree than the one written). Values written into `cmd` must match the safe-value grammar (see Configuration; else exit 20 `unsafe_value`). The adapter's `wire.check` is `{argv, ok_exits: [0]}`, required whenever `wire.hooks` is non-empty: a command that loads the tool's config and changes nothing (its `validate`, or a list read). It runs before the write (a failing check refuses, so a pre-existing error is never blamed on the drop-in) and after it (rollback when the exit is not in `ok_exits`), with the read rules.
 
 ```text
 def owned(data: bytes) -> bool:
     first, sep, rest = data.partition(b"\n")
     m = re.fullmatch(rb"# awkit managed sha256=([0-9a-f]{64})", first)
     return bool(sep) and m is not None and sha256(rest).hexdigest().encode() == m.group(1)
-def open_config_d(tool):                  # every step by fd, O_DIRECTORY|O_NOFOLLOW
+def read_drop_in(d):                      # the audit reader's open: O_NOFOLLOW|O_NONBLOCK, fstat
+    regular file owned by the user and at most 64 KiB, else treated as foreign (never blocks); absent -> None
+def open_config_d(tool, create):          # every step by fd, O_DIRECTORY|O_NOFOLLOW
     walk "/" .. <home> .. "<home>/.config" .. "<home>/.config/<tool>": each owned by the user or root,
         not group- or world-writable, never a symlink, else exit 20 config_unsafe naming it
     "<home>/.config/<tool>" missing -> exit 12 tool_unavailable ("tool has no config directory")
-    config.d: openat; create with mode 0700 when missing; same ownership rule
+    config.d: openat; when missing: create with mode 0700 if create, else absent; same ownership rule
 TEMP = ".awkit-" + 16 random hex + ".tmp"   # never matches *.yaml or *.yml
 
 wire TOOL [--yes] [--dry-run]:
@@ -560,31 +571,40 @@ wire TOOL [--yes] [--dry-run]:
     hooks = adapter(TOOL).wire.hooks or []
     if TOOL == "notice-route" or not hooks: exit 0, outcome nothing_to_wire
     nr = resolved program of notice-route; unregistered -> exit 12 tool_unavailable ("notice-route is not installed")
-    if XDG_CONFIG_HOME set and != <home>/.config: exit 20 xdg_mismatch
+    if XDG_CONFIG_HOME set and != <home>/.config, or HOME set and != <home>: exit 20 xdg_mismatch
     if nr or <home> fails safe_path: exit 20 unsafe_value
     text = render(hooks, nr, TOOL)
     if not flock(wire.lock, LOCK_EX | LOCK_NB): exit 12 unavailable locked
     if any(h.state for h in hooks):
         for U in registered tools, U != TOOL, with a state hook in adapter(U).wire.hooks:
-            if owned(read <home>/.config/<U>/config.d/awkit.yaml): exit 20 duplicate_state_hooks
-    d = open_config_d(TOOL); old = read awkit.yaml via openat(O_NOFOLLOW) or None
+            dU = open_config_d(U, create=False)       # same walk; any failure or an absent directory: not owned
+            if dU and (b := read_drop_in(dU)) is not None and owned(b): exit 20 duplicate_state_hooks
+    d = open_config_d(TOOL, create=False)         # a dry run and an unchanged result create nothing
+    old = read_drop_in(d) if d else None
     if old is not None and not owned(old): exit 20 drop_in_foreign
     if old == text: exit 0, outcome unchanged                    # no audit record
     if --dry-run: print {tool, dry_run: true, outcome: wired|replaced, files[text]}; exit 0
     if run(check).exit not in check.ok_exits: exit 12 tool_unavailable ("<tool>'s check fails before wiring")
     confirm: human present -> "y" on /dev/tty; else --yes; else exit 13 human_required
+    d = d or open_config_d(TOOL, create=True)
     audit attempted {target: path, before_sha256: sha(old) or null, after_sha256: sha(text)}
-    write TEMP in d (O_CREAT|O_EXCL|O_NOFOLLOW, 0600), fsync, renameat(TEMP, "awkit.yaml"), fsync d
-    if run(check).exit not in check.ok_exits:
-        restore: old is None -> unlinkat("awkit.yaml") else write old through a new TEMP and renameat
-        audit outcome {outcome: failed, code: unavailable}; exit 12 unavailable wire_rejected
-    audit outcome {outcome: done}; exit 0, outcome wired (old None) or replaced
-    on any error after TEMP was created: unlinkat(TEMP)
+    write TEMP in d (O_CREAT|O_EXCL|O_NOFOLLOW, 0600), fsync          # error here: unlinkat(TEMP), outcome failed
+    if read_drop_in(d) != old: unlinkat(TEMP); outcome failed; exit 12 unavailable changed    # edited while the prompt waited
+    block SIGINT, SIGTERM and SIGHUP (pthread_sigmask) from here to the end of the rollback
+    renameat(TEMP, "awkit.yaml"), fsync d
+    try: ok = run(check).exit in check.ok_exits
+    finally (also when interrupted):
+        if not ok: restore: old is None -> unlinkat("awkit.yaml") else write old through a new TEMP and renameat
+        audit outcome {outcome: done|failed, code: unavailable when failed}     # always written here
+    exit 12 unavailable wire_rejected, or exit 0 with outcome wired (old None) or replaced
 unwire TOOL [--yes] [--dry-run]:
-    same lock and directory steps; absent file -> unchanged; not owned -> exit 20 drop_in_foreign
-    --dry-run prints outcome removed; confirm; audit attempted; unlinkat("awkit.yaml"), fsync d; audit outcome; removed
+    same lock and directory steps (create=False); absent file -> unchanged; not owned -> exit 20 drop_in_foreign
+    --dry-run prints outcome removed; confirm; audit attempted; re-read, and if it differs from the bytes checked: exit 12 unavailable changed
+    unlinkat("awkit.yaml"), fsync d; audit outcome; removed
     no check runs (removing awkit's file cannot add a config error)
 ```
+
+The pre-check and the confirmation are not atomic with the rename: the re-read just before the rename (and before the unlink) narrows the window to microseconds and cannot close it, and between the rename and the post-check a tool that starts in that minute can see the new file. A `wire.check` that does not parse the hook lists proves nothing about the drop-in, and `wire.rule` does not either (it only calls notice-route); choose a check that loads the tool's config.
 
 Hooks the user wrote by hand are not seen by the state-hook rule (documented), which reads adapters and awkit's own drop-ins only.
 
@@ -596,7 +616,7 @@ A hook marked `state: true` may be wired for one tool at a time (`duplicate_stat
 
 | Id | Fails when | Warns when | Mechanism |
 |---|---|---|---|
-| `config.safe` | A config file, drop-in, overlay file or parent fails the ownership rule. | None. | `lstat` walk |
+| `config.safe` | A config file, drop-in, overlay file or parent fails the ownership rule. | An existing directory of the installers' `PATH` fails it (the installers run without it). | `lstat` walk |
 | `adapter.loaded` | An adapter fails to load (the reason names the overlay path). | None. | Loader |
 | `tool.installed` | `tools.<tool>.enabled: true` is set explicitly and the program does not resolve. | The program does not resolve (the adapter's `install` command is printed). | Program resolution (details name the first rejected candidate and why) |
 | `tool.version` | Never. | The version is below `min_version` or cannot be read (`version_unreadable`). | Version reading (below) |
@@ -627,34 +647,37 @@ Exit 12 `checks_failed` when any check is `fail`.
 
 ### Reading
 
-`awkit audit` reads each registered tool's public `audit.jsonl` and awkit's own file (source `awkit`, descriptor `phase=attempted` with key `[attempt_id]`; `--tool awkit` selects it) directly (design guide §2, §6). The path comes from the adapter's `audit.path` (default `<home>/.local/state/<tool>/audit.jsonl` under the home directory of the password database; `XDG_STATE_HOME` is ignored, and `doctor` warns when it differs). A line is accepted when it parses as a JSON object with a `ts` that `norm_ts` accepts; every other member is kept as read (sanitized), so tool upgrades never hide records. `awkit audit` reads at most the last 64 MiB of each file (`skipped.truncated` names the tools cut) and the dashboard's first read the last 8 MiB. Lines longer than 1 MiB are skipped and counted in `skipped.lines`, a malformed line is skipped and counted without echoing it, and only LF-terminated lines are consumed (a partial tail stays for the next pass). The dashboard records `(st_dev, st_ino, offset)` per file and rereads from the cap window when the inode changes, the size falls below the offset, or the byte before the offset is no longer an LF (this detects `copytruncate` regrowth). The reader:
+`awkit audit` reads each registered tool's public `audit.jsonl` and awkit's own file (source `awkit`, descriptor `phase=attempted` with key `[attempt_id]`; `--tool awkit` selects it) directly (design guide §2, §6). The path comes from the adapter's `audit.path` (default `<home>/.local/state/<tool>/audit.jsonl` under the home directory of the password database; `XDG_STATE_HOME` is ignored, and `doctor` warns when it differs). A line is accepted when it parses as a JSON object with a `ts` that `norm_ts` accepts; every other member is kept as read (sanitized), so tool upgrades never hide records. `awkit audit` reads at most the last 64 MiB of each file (`skipped.truncated` names the tools cut) and the dashboard's first read the last 8 MiB. Lines longer than 1 MiB are skipped and counted in `skipped.lines`, a malformed line is skipped and counted without echoing it, and only LF-terminated lines are consumed (a partial tail stays for the next pass). The dashboard records `(st_dev, st_ino, offset, head)` per file, where `head` is the file's first 64 bytes, and rereads from the cap window when the inode changes, the head differs (a reused inode number), the size falls below the offset, or the byte before the offset is no longer an LF (this detects `copytruncate` regrowth). One pass of the dashboard reads at most 8 MiB (when more is waiting it jumps to the last 8 MiB window and sets `skipped.truncated`), so a partial tail that keeps growing is bounded too. Any `OSError` on open or read (`ELOOP`, `EACCES`, `EISDIR`) is `skipped.files`, never an exception. The tool name `awkit` is reserved: an adapter with `tool: awkit` is `adapter_invalid`. The reader:
 
 ```text
 CAP_COMMAND = 64 MiB; CAP_FIRST_DASHBOARD_READ = 8 MiB
-def read_records(tool, path, cap, st=None):          # st: dashboard (dev, ino, offset) or None
-    fd = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK); s = fstat(fd)    # missing -> nothing
+def read_records(tool, path, cap, st=None):          # st: dashboard (dev, ino, offset, head) or None
+    fd = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK); s = fstat(fd)    # missing -> nothing; any other OSError -> skipped.files
     if not S_ISREG(s.st_mode) or s.st_uid != getuid(): skipped.files += [tool]; return
-    if st and (s.st_dev, s.st_ino) == st.id and s.st_size >= st.offset \
+    if st and (s.st_dev, s.st_ino) == st.id and pread(fd, 64, 0) == st.head and s.st_size >= st.offset \
           and (st.offset == 0 or pread(fd, 1, st.offset - 1) == b"\n"): start = st.offset
     else:
         start = max(0, s.st_size - cap)
         if start > 0: skipped.truncated += [tool]; start = offset after the first LF at or after start
+    if st and start == st.offset and s.st_size - start > 8 MiB: start = s.st_size - 8 MiB, then as for a fresh read   # per-pass cap
     for each LF-terminated line from start:            # a partial tail stays for the next pass
         if len(line) > 1 MiB: skipped.lines[tool] += 1; continue
-        try: rec = json.loads(line, parse_constant=refuse)
-        except (ValueError, RecursionError): skipped.lines[tool] += 1; continue
-        if not isinstance(rec, dict) or norm_ts(rec.get("ts")) is None: skipped.lines[tool] += 1; continue
-        yield sanitize_tree(rec)
+        try:                                           # parsing and sanitizing both inside the try
+            rec = json.loads(line, parse_constant=refuse)
+            if not isinstance(rec, dict) or norm_ts(rec.get("ts")) is None: raise ValueError
+            rec = sanitize_tree(rec)                   # iterative, or any depth beyond 32 is an error
+        except Exception: skipped.lines[tool] += 1; continue
+        yield rec
     st.offset = end of the last complete line
 sources = [(t, adapter(t).audit) for t in registered tools] + [("awkit", built-in descriptor)]
 ```
 
-Pairing is declared per adapter: `audit: {path, pair?: {key: [path...], attempted: {path, value}}}`. Without `pair` every record stands alone. Foreign `attempt_id` values are not grammar-checked beyond being strings of at most 128 characters; awkit's own records keep `^[A-Za-z0-9_-]{22}$`. Cross-tool correlation is out of 0.x.
+Pairing is declared per adapter: `audit: {path, pair?: {key: [path...], attempted: {path, value}}}`. Without `pair` every record stands alone. Pairing key values are strings or integers (never booleans, floats, lists or objects, which make the record a single), and the attempted value compares typed as in the path language. Foreign `attempt_id` values are not grammar-checked beyond being strings of at most 128 characters; awkit's own records keep `^[A-Za-z0-9_-]{22}$`. Cross-tool correlation is out of 0.x.
 
 ```text
 groups = {}
 for rec in records_of(tool):                      # in file order
-    k = tuple(path_eval_scalar(p, rec) for p in pair.key)
+    k = tuple(key_value(path_eval_scalar(p, rec)) for p in pair.key)     # key_value: a str or an int that is not a bool, else None
     if any(v is None for v in k): emit single(rec); continue
     groups.setdefault((tool,) + k, []).append(rec)
 for key, recs in groups:
@@ -695,18 +718,23 @@ def sanitize(s, limit=None):                   # s already decoded (invalid UTF-
         else:                                  out.append(marker(ch));   marks = 3
         i += 1
     text = "".join(out)
-    if limit is not None and (cut or len(text) > limit): text = text[:limit-1] + "…"
+    if limit is not None and (cut or len(text) > limit):      # cut between units (a marker is one unit)
+        keep, n = [], 0
+        for u in out:
+            if n + len(u) > limit - 1: break
+            keep.append(u); n += len(u)
+        text = "".join(keep) + "…"
     return text
 marker(ch) = f"<U+{ord(ch):04X}>"; limits: title 200, other strings 1000; dialog bodies: no limit (64 KiB cap)
 ```
 
-Cc, Cf, Cs (lone surrogates), Co, Cn, Zl, Zp and everything not listed are replaced; LF and TAB are replaced like other controls, because there is no multi-line field in 0.x outputs (the wire `text` is awkit's own generated text, not tool text). The output encoding never raises, because no surrogate survives. Ids are grammar-checked before sanitizing and pass unchanged; the badge reads only `ts` and `counts` of `doctor-last.json`, so no cached string is shown and nothing is sanitized twice. A test checks that the input `<U+202E>` never appears in output and that no combining mark follows a marker. This applies to every string, not only the fields a schema marks `x-untrusted`.
+Cc, Cf, Cs (lone surrogates), Co, Cn, Zl, Zp and everything not listed are replaced; LF and TAB are replaced like other controls, because no field of 0.x output is multi-line (the wire `text` is awkit's own generated text, not tool text). The one exception is a dialog body: it is split on LF first and each line is sanitized alone (see Confirmation dialog). A marker is at most 10 characters (`<U+10FFFF>`), so output is at most ten times the input. The output encoding never raises, because no surrogate survives. Ids are grammar-checked before sanitizing and pass unchanged; the badge reads only `ts` and `counts` of `doctor-last.json`, so no cached string is shown and nothing is sanitized twice. A test checks that the input `<U+202E>` never appears in output and that no combining mark follows a marker. This applies to every string, not only the fields a schema marks `x-untrusted`.
 
 The dashboard never interprets markup in displayed text. No string from a tool, adapter, config, cache file or audit file is parsed as markup: every string reaches Textual only as a `Text` or `Content` object built by one helper, including cells, list items, the detail pane, the dialog, the status line, border titles and subtitles, tab and column labels, the header title, tooltips and notifications (`notify` with `markup=False`). Each row render is wrapped so an exception renders a marker row (`<render error>`) instead of ending the app. A test runs a corpus of hostile strings (including markup, every control character and every code point) through every view and every `--json` output. A test walks every widget of every view with the hostile corpus, and a lint check refuses a `str` passed positionally to a Textual constructor in `tui/`.
 
 ## Configuration
 
-`~/.config/awkit/config.yaml`, `~/.config/awkit/config.d/*.yaml` (lexical order, maps merged, lists replaced; at most 64 drop-ins) and the overlay `~/.config/awkit/adapters/` (at most 128 adapters) are read only under the home directory of the password database. `XDG_CONFIG_HOME` and every environment variable that would name a path or a command are ignored. A config file, drop-in, adapter file or any of their parent directories that is a symlink, is not owned by the user, or is group- or world-writable is refused (`config_unsafe`, exit 20, naming the path). One strict loader reads config, drop-ins and adapters: a PyYAML `SafeLoader` subclass that refuses anchors, aliases, tags other than the core schema, duplicate keys, NUL and lone surrogates; at most 1 MiB per file, at most 16 MiB in total across config, drop-ins and adapters, and at most 100,000 YAML nodes per file (a nesting that exhausts recursion is `config_invalid`); files are opened with `O_NOFOLLOW` and checked with `fstat` on the descriptor, and parents are walked by descriptor. `--config PATH` exists only on `validate`, which runs nothing: it loads that file plus its sibling `config.d/` and the default overlay, applies the same ownership checks and reports (does not exempt) a failure. Unknown keys and invalid values fail fast naming the key. Every key whose default is "none" accepts `null`. A `tools.<tool>` entry for a tool with no adapter is a `validate` warning and ignored at runtime. Schema: `schemas/config.json`; every key is documented in `config.example.yaml`. The schemas anchor every pattern with `(?![\s\S])` so a trailing line feed never matches; the Pydantic models use `regex_engine="python-re"`, because that look-ahead needs it (the default engine cannot build it), the trailing-line-feed negative test stays for every pattern, and the anchor is never replaced with `$`.
+`~/.config/awkit/config.yaml`, `~/.config/awkit/config.d/*.yaml` (lexical order, maps merged, lists replaced; at most 64 drop-ins) and the overlay `~/.config/awkit/adapters/` (at most 128 adapters) are read only under the home directory of the password database. `XDG_CONFIG_HOME` and every environment variable that would name a path or a command are ignored. A config file, drop-in, adapter file or any of their parent directories that is a symlink, is not owned by the user, or is group- or world-writable is refused (`config_unsafe`, exit 20, naming the path). One strict loader reads config, drop-ins and adapters: a PyYAML `SafeLoader` subclass that refuses anchors, aliases, tags other than the core schema, duplicate keys, NUL and lone surrogates, and an integer scalar whose source text is not plain decimal (`0` or `-?[1-9][0-9]*`: `010`, `0x1F`, `0b11` and `+5` are `config_invalid`; a boolean is never an integer, the models use strict integers); at most 1 MiB per file, at most 16 MiB in total across config, drop-ins and adapters, and at most 100,000 YAML nodes per file (a nesting that exhausts recursion is `config_invalid`); files are opened with `O_NOFOLLOW` and checked with `fstat` on the descriptor, and parents are walked by descriptor. `--config PATH` exists only on `validate`, which runs nothing: it loads that file plus its sibling `config.d/` and the default overlay, applies the same ownership checks and reports (does not exempt) a failure. Unknown keys and invalid values fail fast naming the key. Every key whose default is "none" accepts `null`. A `tools.<tool>` entry for a tool with no adapter is a `validate` warning and ignored at runtime. Schema: `schemas/config.json`; every key is documented in `config.example.yaml`. The schemas anchor every pattern with `(?![\s\S])` so a trailing line feed never matches; the Pydantic models use `regex_engine="python-re"`, because that look-ahead needs it (the default engine cannot build it), the trailing-line-feed negative test stays for every pattern, and the anchor is never replaced with `$`. A `$` at the end of a pattern elsewhere in this document stands for that anchor.
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -729,14 +757,14 @@ There are no `repos:` and no `hooks:` keys in 0.x.
 **Interval grammar.** A `cron.intervals.<tool>` string matches the pattern below: its first character is never `-` and single spaces separate words; it is passed as one argv element, so it cannot add a flag.
 
 ```text
-^(?!-)[A-Za-z0-9*/,-]{1,32}(?: [A-Za-z0-9*/,-]{1,32}){0,6}$
+^(?!-)[A-Za-z0-9*/,-]{1,32}(?: [A-Za-z0-9*/,-]{1,32}){0,6}(?![\s\S])
 ```
 
-**Safe values.** Every path awkit writes into a drop-in `cmd` or passes to a tool's installer must match `^/[A-Za-z0-9._+@/-]{0,4095}$`, with no `//` and no `..` segment (schema def `safe_path`). Values failing it are refused at load (`validate` and every command; exit 2 `config_invalid` naming the key) for `tools.<tool>.bin`, `cron.env_file` and `cron.path_extra`, and at write time (exit 20 `unsafe_value`) for resolved programs and the home directory.
+**Safe values.** Every path awkit writes into a drop-in `cmd` or passes to a tool's installer must match `^/[A-Za-z0-9._+@/-]{0,4095}(?![\s\S])`, with no `//` and no `..` segment (schema def `safe_path`). Values failing it are refused at load (`validate` and every command; exit 2 `config_invalid` naming the key) for `tools.<tool>.bin`, `cron.env_file` and `cron.path_extra`, and at write time (exit 20 `unsafe_value`) for resolved programs and the home directory.
 
 ### Program resolution
 
-awkit never searches the process `PATH`. A tool program is `tools.<tool>.bin` (absolute) or the first match of the adapter's `bin` in `<home>/.local/bin`, each `cron.path_extra` entry, `/usr/local/bin`, `/usr/bin` and `/bin`. Helper programs (`crontab`, `tmux`, `sh`, `bwrap`, `socat`, `ps`) come from `/usr/local/bin`, `/usr/bin`, `/bin`, `/usr/sbin` and `/sbin`. A candidate is accepted only when it is a regular file (after following symlinks) with `X_OK`, and the file and every directory from it up to `/` (for both the link and its target) are owned by the user or root and not group- or world-writable. The path awkit passes or writes is the unresolved candidate path (symlinks kept). When no candidate is accepted the program is unresolved (see Registration); a tool installed elsewhere needs `tools.<tool>.bin`.
+awkit never searches the process `PATH`. A tool program is `tools.<tool>.bin` (absolute) or the first match of the adapter's `bin` in `<home>/.local/bin`, each `cron.path_extra` entry, `/usr/local/bin`, `/usr/bin` and `/bin`. Helper programs (`crontab`, `tmux`, `sh`, `bwrap`, `socat`, `ps`) come from `/usr/local/bin`, `/usr/bin`, `/bin`, `/usr/sbin` and `/sbin`. A candidate is accepted only when it is a regular file (after following symlinks) with `X_OK`, and the ownership rule holds for the file and every directory from it up to `/`: each is owned by the user or root and not group- or world-writable. For a symlink the rule is applied to the link's owner and to every directory of the link's path, and to the target and every directory of the target's path; a link's own mode bits (always `0777`) are never checked. The path awkit passes or writes is the unresolved candidate path (symlinks kept). When no candidate is accepted the program is unresolved (see Registration); a tool installed elsewhere needs `tools.<tool>.bin`.
 
 ## Environment variables
 
