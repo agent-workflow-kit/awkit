@@ -95,7 +95,8 @@
             "done",
             "failed",
             "unknown"
-          ]
+          ],
+          "description": "attempted on the attempted record; done, failed or unknown on the outcome record."
         },
         "code": {
           "oneOf": [

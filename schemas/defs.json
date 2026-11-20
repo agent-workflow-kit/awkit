@@ -64,7 +64,7 @@
       "maxLength": 4096,
       "minLength": 1,
       "pattern": "^/[^\\r\\n]{0,4095}(?![\\s\\S])",
-      "description": "An absolute path (display only). Full match."
+      "description": "An absolute path. Full match."
     },
     "safe_path": {
       "type": "string",
@@ -100,7 +100,7 @@
       "maxLength": 128,
       "minLength": 12,
       "pattern": "^[0-9a-f]{12,128}(?![\\s\\S])",
-      "description": "A lowercase hex hash of 12 to 128 digits (a plan, content or head hash). Full match."
+      "description": "A lowercase hex hash of 12 to 128 digits (a plan, content or head hash). An injection boundary; the tool checks the length it needs. Full match."
     },
     "int": {
       "type": "string",
@@ -393,7 +393,7 @@
         "error"
       ],
       "additionalProperties": false,
-      "description": "The envelope printed on stdout for every non-zero exit except doctor's exit 12. reason is present only for exits 12 and 20; details.candidates lists the candidates of exit 21 as <tool>:<object> or site:KEY strings."
+      "description": "The envelope printed on stdout for every non-zero exit except doctor's exit 12, cron's exit 12 cron_partial and validate's exit 2, which print the command's document. reason is present only for exits 12 and 20; details.candidates lists the candidates of exit 21 as <tool>:<object> or site:KEY strings."
     },
     "doctor_status": {
       "enum": [
@@ -456,7 +456,8 @@
         "reason",
         "details"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "description": "tool is null for a global check; ids are fixed strings except override ids tool.<tool>.*."
     },
     "doctor_result": {
       "type": "object",

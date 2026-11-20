@@ -39,16 +39,17 @@ dashboard:
   read_timeout: 10s
 
 cron:
-  # A user-owned file (mode 0600) passed to the tools whose own `cron install` takes an env file.
-  # Default: none.
+  # A user-owned file (mode 0600) passed to the tools whose own `cron install` takes --env-file
+  # (agent-spawn, wtctl). Other tools read their own env file from their own config. Default: none.
   env_file: null
   # Absolute directories searched for tool programs after ~/.local/bin. Default: [].
   path_extra: []
-  # The tool's own interval value for its `cron install`: a count such as 15m or 1h, or a
-  # five-field cron expression, as that tool accepts. Default: the tool's own. Example entries:
-  #   agent-spawn: 10m
+  # The value passed to the tool's own interval flag, verbatim (the tool validates it).
+  # Default: the tool's own. Example entries:
+  #   agent-spawn: 10
+  #   review-watch: "*/10 * * * *"
   intervals: {}
-  # Opt-in names an adapter maps to flags of the tool's own installer. Default: none. Example entry:
+  # Option names the tool's adapter maps to flags of its own installer. Default: none. Example entry:
   #   ticket-work: [with-start]
   options: {}
 

@@ -2,6 +2,6 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "awkit/doctor-last.json",
   "title": "awkit doctor-last.json",
-  "description": "The last doctor result, written to the state directory (temporary file, fsync, rename) for the dashboard badge. Same document as doctor --json. Read back capped at 1 MiB; any defect means no badge.",
+  "description": "The last doctor result, written to the state directory (temporary file, fsync, rename) for the dashboard badge. Same document as doctor --json. Read back capped at 1 MiB and validated; the badge uses only ts and counts; any defect means no badge.",
   "$ref": "defs.json#/$defs/doctor_result"
 }

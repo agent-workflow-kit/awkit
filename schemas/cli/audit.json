@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "awkit/cli/audit.json",
   "title": "audit --json",
-  "description": "The merged timeline, oldest first, by (ts as UTC instant, tool, file offset of the first record). Each tool's adapter may declare a pairing descriptor (key paths and the attempted value): records sharing a key form one entry of any size (paired, in_flight, unknown or unpaired); without a descriptor, or with --no-pair, every record is a single. skipped counts malformed or oversize lines per tool and lists the tools whose file was unusable.",
+  "description": "The merged timeline, oldest first, by (ts as UTC instant, tool, file offset of the first record). Each tool's adapter may declare a pairing descriptor (key paths and the attempted value): records sharing a key form one entry of any size (paired, in_flight, unknown or unpaired); without a descriptor, or with --no-pair, every record is a single. skipped counts malformed or oversize lines per tool, lists the tools whose file was unusable and the tools whose file was cut to the last 64 MiB. Sources are the registered tools and awkit's own file (source awkit).",
   "type": "object",
   "properties": {
     "entries": {
@@ -47,7 +47,7 @@
             "minItems": 1,
             "maxItems": 10000,
             "x-untrusted": true,
-            "description": "The sanitized tool records as read; each has a string ts that is RFC 3339."
+            "description": "The sanitized tool records as read; each has a ts that norm_ts accepts; records keep their own ts text."
           }
         },
         "required": [
@@ -81,11 +81,20 @@
           },
           "maxItems": 256,
           "uniqueItems": true
+        },
+        "truncated": {
+          "type": "array",
+          "items": {
+            "$ref": "../defs.json#/$defs/tool_name"
+          },
+          "maxItems": 257,
+          "uniqueItems": true
         }
       },
       "required": [
         "lines",
-        "files"
+        "files",
+        "truncated"
       ],
       "additionalProperties": false
     }

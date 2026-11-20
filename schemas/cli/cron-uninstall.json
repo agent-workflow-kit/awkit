@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "awkit/cli/cron-uninstall.json",
   "title": "cron uninstall --json",
-  "description": "Per-tool outcome in lexical tool order. awkit runs each tool's own cron install or uninstall and never writes the crontab itself. With --dry-run nothing is run except a tool's own read-only dry run and unchanged is null; planned carries the argv and, where the tool reports it, changed. unchanged is true when the crontab text did not change.",
+  "description": "Per-tool outcome in lexical tool order. awkit runs each tool's own cron install or uninstall and never writes the crontab itself. With --dry-run nothing runs: each tool is planned with the exact argv and unchanged is null. Printed on exit 0 and on exit 12 cron_partial. unchanged is true when the crontab text did not change.",
   "type": "object",
   "properties": {
     "dry_run": {
@@ -38,12 +38,6 @@
             "minimum": 0,
             "maximum": 255
           },
-          "changed": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          },
           "argv": {
             "type": "array",
             "items": {
@@ -52,7 +46,8 @@
               "minLength": 0,
               "x-untrusted": true
             },
-            "maxItems": 64
+            "maxItems": 64,
+            "description": "The exact argv awkit ran or would run."
           },
           "message": {
             "oneOf": [
@@ -60,7 +55,8 @@
                 "type": "string",
                 "maxLength": 1000,
                 "minLength": 0,
-                "x-untrusted": true
+                "x-untrusted": true,
+                "description": "The installer's stderr, sanitized and cut to 1000 characters, or the timeout hint."
               },
               {
                 "type": "null"

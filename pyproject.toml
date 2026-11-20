@@ -1,11 +1,14 @@
 [project]
 name = "awkit"
 version = "0.0.1"
-description = "awkit harness: tool registry, adapters, state graph, rules, tick/run loop and dashboard for the awkit tools"
+description = "awkit harness: adapters, dashboard, doctor, cron and notification wiring, and the merged audit timeline for the awkit tools"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
-dependencies = []
+dependencies = ["pyyaml>=6", "pydantic>=2.12,<3"]
+
+[project.optional-dependencies]
+tui = ["textual>=8.2,<9"]
 
 [project.scripts]
 awkit = "awkit.cli:main"
@@ -33,7 +36,10 @@ pythonVersion = "3.12"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["live: needs real models/hosts/credentials; never run in CI"]
+markers = [
+  "live: needs real tools, a real crontab or credentials; never run in CI",
+  "process: runs under a pseudo-terminal (terminal handoff, signals)",
+]
 addopts = "-m 'not live'"
 
 [tool.semantic_release]

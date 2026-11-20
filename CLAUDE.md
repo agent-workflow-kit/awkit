@@ -20,7 +20,7 @@
 - **`make verify` before every commit.**
 - **All subprocess and HTTP calls go through `src/awkit/gateway.py`.**
 - **Never destroy work.** Never run destructive git commands (reset, checkout of files, clean, restore, force-push). Never kill processes by pattern; signal only an exact PID this tool started (verified by PID plus start time) or a process group it created for a hook.
-- Automation never passes `--yes` to bypass a confirm default, except when an enforced gate allows the action or config explicitly enables it (architecture §12.4, design guide §4.4); never passes `--force`; the dashboard passes `--yes --actor human:<user>` after its own confirmation.
+- Automation never passes `--yes` to bypass a confirm default, except when an enforced gate allows the action or config explicitly enables it (architecture §12.4, design guide §4.4); never passes `--force`; the dashboard passes `--actor human:<user>`, and `--yes` where the adapter's recipe says so, only after its own confirmation.
 - **Minimize dependencies.** Justify each one in `docs/design.md`.
 
 ## Workflow

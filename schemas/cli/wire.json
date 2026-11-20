@@ -44,7 +44,7 @@
             "type": "string",
             "maxLength": 1000000,
             "minLength": 0,
-            "description": "The exact drop-in text (shown for wire, and with --dry-run); awkit's own text."
+            "description": "The exact drop-in text: the marker line with the hash of the rest, then the hooks map (awkit's own text)."
           }
         },
         "required": [

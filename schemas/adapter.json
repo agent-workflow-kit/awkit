@@ -292,7 +292,8 @@
             "required": [
               "read",
               "key",
-              "to_kind"
+              "to_kind",
+              "to_tool"
             ],
             "additionalProperties": false
           },
@@ -322,7 +323,8 @@
             "required": [
               "read",
               "pattern",
-              "to_kind"
+              "to_kind",
+              "to_tool"
             ],
             "additionalProperties": false
           },
@@ -353,7 +355,8 @@
             "required": [
               "read",
               "field",
-              "to_kind"
+              "to_kind",
+              "to_tool"
             ],
             "additionalProperties": false
           },
@@ -408,34 +411,54 @@
       },
       "required": [
         "name",
-        "flag",
         "from",
         "type"
       ],
       "additionalProperties": false,
-      "if": {
-        "properties": {
-          "type": {
-            "const": "enum"
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "enum"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "values"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "values"
+              ]
+            }
           }
         },
-        "required": [
-          "type"
-        ]
-      },
-      "then": {
-        "required": [
-          "values"
-        ]
-      },
-      "else": {
-        "not": {
-          "required": [
-            "values"
-          ]
+        {
+          "if": {
+            "properties": {
+              "from": {
+                "pattern": "^dry_run[.]"
+              }
+            },
+            "required": [
+              "from"
+            ]
+          },
+          "then": {
+            "required": [
+              "flag"
+            ]
+          }
         }
-      },
-      "description": "A flag passed to the real command with a value checked against a closed grammar; a value that does not match refuses the call."
+      ],
+      "description": "A typed value: row.<field> values go into the dry run and the real command (appended with flag, or filling {pass.<name>} without one); dry_run.<path> values need flag and go into the real command only."
     },
     "recipe": {
       "type": "object",
@@ -473,7 +496,7 @@
         "show"
       ],
       "additionalProperties": false,
-      "description": "The confirmation recipe. With dry_run true awkit runs the action's own argv plus --dry-run --json, never with --yes or a human actor."
+      "description": "The confirmation recipe. The argv contains --json; with dry_run true awkit runs the argv plus the row pass values, --actor and --dry-run, never --yes."
     },
     "action": {
       "type": "object",
@@ -578,6 +601,34 @@
         {
           "if": {
             "required": [
+              "recipe"
+            ]
+          },
+          "then": {
+            "properties": {
+              "argv": {
+                "contains": {
+                  "const": "--json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "human_flag"
+            ]
+          },
+          "then": {
+            "required": [
+              "terminal"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
               "human_flag"
             ]
           },
@@ -611,35 +662,20 @@
         }
       ],
       "additionalProperties": false,
-      "description": "A named operation on an object: a recipe or terminal true. A destructive action needs a recipe with dry_run true or terminal true. A reserved human flag is allowed only as human_flag."
+      "description": "A named operation on an object: a recipe or terminal true. A destructive action needs a recipe with dry_run true or terminal true. A reserved human flag is allowed only as human_flag, with terminal true. Every action opens awkit's dialog; a terminal action has no dry run."
     },
     "tui": {
       "type": "object",
       "properties": {
         "argv": {
           "$ref": "#/$defs/tui_argv"
-        },
-        "result_file": {
-          "type": "boolean"
-        },
-        "intents": {
-          "type": "object",
-          "propertyNames": {
-            "type": "string",
-            "pattern": "^[a-z][a-z0-9_]{0,63}(?![\\s\\S])"
-          },
-          "additionalProperties": {
-            "$ref": "defs.json#/$defs/name_id"
-          },
-          "maxProperties": 16,
-          "description": "Child intent to the id of an action whose dialog opens for selected[0].object."
         }
       },
       "required": [
         "argv"
       ],
       "additionalProperties": false,
-      "description": "How enter opens the tool's own TUI on the selected row; with result_file true awkit passes --result-file and reads the child's intent."
+      "description": "How enter opens the tool's own TUI on the selected row. 0.x passes no --result-file to it."
     },
     "cron": {
       "type": "object",
@@ -649,10 +685,6 @@
         },
         "uninstall": {
           "$ref": "#/$defs/argv"
-        },
-        "dry_run": {
-          "type": "boolean",
-          "description": "True when the tool's cron install accepts --dry-run --json and reports a changed member."
         },
         "start": {
           "oneOf": [
@@ -702,7 +734,7 @@
               "additionalProperties": false
             }
           ],
-          "description": "How the first line of the tool's block is recognized (a full match on a line)."
+          "description": "How the first line of the tool's block is recognized: exact, prefix or Python re.fullmatch on the line without trailing spaces, tabs and CR."
         },
         "end": {
           "oneOf": [
@@ -723,12 +755,6 @@
           "minLength": 3,
           "pattern": "^--[a-z][a-z0-9-]{0,63}(?![\\s\\S])"
         },
-        "interval_pattern": {
-          "type": "string",
-          "maxLength": 256,
-          "minLength": 1,
-          "description": "A pattern a cron.intervals.<tool> value must match; full match."
-        },
         "env_file_flag": {
           "type": "string",
           "maxLength": 66,
@@ -743,17 +769,25 @@
           },
           "additionalProperties": {
             "type": "array",
+            "prefixItems": [
+              {
+                "type": "string",
+                "maxLength": 66,
+                "minLength": 3,
+                "pattern": "^--[a-z][a-z0-9-]{0,63}(?![\\s\\S])"
+              }
+            ],
             "items": {
               "type": "string",
-              "maxLength": 66,
-              "minLength": 3,
-              "pattern": "^--[a-z][a-z0-9-]{0,63}(?![\\s\\S])"
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^(?:[^{]|[{][{])*(?![\\s\\S])"
             },
             "minItems": 1,
             "maxItems": 8
           },
           "maxProperties": 16,
-          "description": "Opt-in names (cron.options.<tool>) to the flags they add."
+          "description": "Option name to the literal argv items it adds; the first is a flag."
         }
       },
       "required": [
@@ -911,7 +945,7 @@
       },
       "required": [],
       "additionalProperties": false,
-      "description": "The tool's own validate, its probe argv and extra checks."
+      "description": "validate, probe, env (variable names), needs (programs such as bwrap and socat) and pair (sibling minimum versions)."
     },
     "wire": {
       "type": "object",
@@ -927,9 +961,6 @@
                 "minLength": 4,
                 "pattern": "^(?:post|on)-[a-z][a-z0-9_-]{0,63}(?![\\s\\S])"
               },
-              "timeout": {
-                "$ref": "defs.json#/$defs/duration"
-              },
               "state": {
                 "type": "boolean"
               }
@@ -940,15 +971,50 @@
             "additionalProperties": false
           },
           "maxItems": 32,
-          "description": "Hooks routed to notice-route send; state true marks a state hook (agent-spawn and claude-session may not both be wired)."
+          "description": "Hooks routed to notice-route send; state true marks a state hook, which only one tool may have wired."
         },
-        "rules_read": {
-          "$ref": "defs.json#/$defs/name_id",
-          "description": "notice-route's adapter only: a read whose rows have a source field listing the sources that have a rule."
+        "check": {
+          "type": "object",
+          "properties": {
+            "argv": {
+              "$ref": "#/$defs/argv"
+            },
+            "ok_exits": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+              },
+              "minItems": 1,
+              "maxItems": 16,
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "argv"
+          ],
+          "additionalProperties": false,
+          "description": "A command that loads the tool's config and changes nothing; run before and after the write; an exit outside ok_exits (default [0]) refuses or rolls back."
         }
       },
       "required": [],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "if": {
+        "properties": {
+          "hooks": {
+            "minItems": 1
+          }
+        },
+        "required": [
+          "hooks"
+        ]
+      },
+      "then": {
+        "required": [
+          "check"
+        ]
+      }
     },
     "override": {
       "oneOf": [

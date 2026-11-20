@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "awkit/cli/adapters-show.json",
   "title": "adapters show --json",
-  "description": "One adapter after loading, with the effective values (enabled and bin from the config applied). A failed adapter exits 0 with status failed and adapter null.",
+  "description": "One adapter after loading, with the effective values (enabled and bin from the config applied). A failed adapter exits 0 with status adapter_invalid and adapter null.",
   "type": "object",
   "properties": {
     "tool": {
@@ -22,7 +22,7 @@
         "registered",
         "absent",
         "disabled",
-        "failed"
+        "adapter_invalid"
       ]
     },
     "enabled": {

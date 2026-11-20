@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "awkit/cli/adapters-list.json",
   "title": "adapters list --json",
-  "description": "Each adapter with its source, tool, min_version and status (registered, absent, disabled or failed).",
+  "description": "Each adapter with its source, tool, min_version and status (registered, absent, disabled or adapter_invalid).",
   "type": "object",
   "properties": {
     "adapters": {
@@ -37,7 +37,7 @@
               "registered",
               "absent",
               "disabled",
-              "failed"
+              "adapter_invalid"
             ]
           },
           "error": {
