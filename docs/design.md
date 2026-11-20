@@ -1,6 +1,6 @@
 # awkit: design
 
-Status: 0.1.0-design (2026-11-19), designed against architecture v1.30. `interface.md` is the single normative source; this file records the decisions and the reasons and links to its headings (architecture §7 and §20, design guide).
+Status: 0.1.0-design (2026-11-19), designed against architecture v1.31. `interface.md` is the single normative source; this file records the decisions and the reasons and links to its headings (architecture §7 and §20, design guide).
 
 ## Role and layer
 
